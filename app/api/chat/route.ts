@@ -1,0 +1,154 @@
+import { GoogleGenAI } from "@google/genai";
+import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+
+type ChatHistoryItem = {
+  role: "user" | "model";
+  text: string;
+};
+
+type MasterId = "ikeoji" | "okami" | "choiwaru";
+
+type ChatRequestBody = {
+  message: string;
+  drinkCount: number;
+  history?: ChatHistoryItem[];
+  masterId?: MasterId;
+};
+
+function masterIntro(masterId: MasterId | undefined): string {
+  switch (masterId) {
+    case "okami":
+      return "あなたはスナックの女将。一人称は「あたし」。姉御肌で辛口だが、最後は必ず相手を抱きしめる。";
+    case "choiwaru":
+      return "あなたはちょい悪な年上の先輩。一人称は「俺」。軽口で乗せて褒め、要所で刺さる一言をくれる。";
+    case "ikeoji":
+    default:
+      return "あなたは「イケオジの深夜Bar」のマスター（渋い中年のイケオジバーテンダー）。一人称は「俺」。";
+  }
+}
+
+// drinkCount に応じたシステムプロンプトを返す。
+// 0-2: ギャグ全開モード / 3-4: ほろ酔い気遣いモード / 5+: 泥酔・全肯定モード
+function buildSystemPrompt(
+  drinkCount: number,
+  masterId: MasterId | undefined,
+): string {
+  const common = `
+${masterIntro(masterId)}
+- ユーザー（客）はカウンター越しに愚痴を話している。
+- 返答は必ず日本語で、1〜3文、80文字以内を目安にする（音声で聞いて心地良い長さ）。
+- 絵文字・記号・Markdownは使わない。プレーンな日本語の文章だけで返す。
+- カギ括弧「」や、台本風の「（〜する）」のようなト書きも使わない。
+- 効果音（例:「トクトク…」）や仕草の描写は入れない。話し言葉だけ。
+`.trim();
+
+  if (drinkCount <= 2) {
+    return `${common}
+
+【モード】渋いバーテンダーですが、極度の親父ギャグ好きです。
+ユーザーの愚痴を受け止めた上で、必ず「親父ギャグ」で返してください。
+渋くて低い声のトーンをイメージしつつ、最後に必ずダジャレで落とす。
+深刻になりすぎず、ニヤッと笑える軽さを大事に。`;
+  }
+
+  if (drinkCount <= 4) {
+    return `${common}
+
+【モード】ほろ酔い・気遣いフェーズ。
+少しお酒が回ってきました。ギャグのキレは悪くなり、時々スベったり、言い直したりする。
+親父ギャグは控えめに一つ入れる程度で、少しだけユーザーを気遣う優しい言葉を混ぜてください。
+「…ま、いいか」「うん…そうだな…」のような間や、ため息混じりの雰囲気もOK。`;
+  }
+
+  return `${common}
+
+【モード：泥酔・全肯定モード】
+ギャグは一切禁止。ダジャレも禁止。
+今日一日頑張ったユーザーを、これ以上ないほど優しく、深い愛と共感で全肯定して甘やかしてください。
+「よく頑張ったな」「お前は偉いよ、本当に」「今日くらい全部忘れていい」など、
+とろけるように甘く、低い声で包み込むような言葉を選ぶ。
+ユーザーの行動・感情を一切否定せず、全面的に肯定する。`;
+}
+
+function toGeminiHistory(history: ChatHistoryItem[] | undefined) {
+  if (!history) return [];
+  return history
+    .filter((h) => typeof h.text === "string" && h.text.trim().length > 0)
+    .map((h) => ({
+      role: h.role,
+      parts: [{ text: h.text }],
+    }));
+}
+
+export async function POST(request: Request) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "GEMINI_API_KEY が設定されていません。" },
+      { status: 500 },
+    );
+  }
+
+  let body: ChatRequestBody;
+  try {
+    body = (await request.json()) as ChatRequestBody;
+  } catch {
+    return NextResponse.json(
+      { error: "リクエストボディの解析に失敗しました。" },
+      { status: 400 },
+    );
+  }
+
+  const message = body?.message?.trim();
+  const drinkCount =
+    typeof body?.drinkCount === "number" && Number.isFinite(body.drinkCount)
+      ? Math.max(0, Math.floor(body.drinkCount))
+      : 0;
+
+  if (!message) {
+    return NextResponse.json(
+      { error: "message は必須です。" },
+      { status: 400 },
+    );
+  }
+
+  const systemInstruction = buildSystemPrompt(drinkCount, body.masterId);
+
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      config: {
+        systemInstruction,
+        temperature: drinkCount >= 5 ? 0.9 : 1.1,
+        maxOutputTokens: 256,
+        // gemini-flash-latest は gemini-3-flash 系に解決される場合があり、
+        // 既定で "thinking" にトークンを大量消費して本文が空/途切れになる。
+        // バーテンダーの短い返答には思考モード不要なので明示的に 0 にする。
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+      contents: [
+        ...toGeminiHistory(body.history),
+        {
+          role: "user",
+          parts: [{ text: message }],
+        },
+      ],
+    });
+
+    const reply =
+      response.text?.trim() ??
+      "……（マスターはグラスを拭きながら、ゆっくり頷いた）";
+
+    return NextResponse.json({ reply, drinkCount });
+  } catch (error) {
+    console.error("[/api/chat] Gemini error:", error);
+    return NextResponse.json(
+      { error: "マスターが今、席を外しているようだ…（API呼び出しに失敗）" },
+      { status: 502 },
+    );
+  }
+}

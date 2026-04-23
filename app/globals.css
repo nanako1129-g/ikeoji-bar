@@ -1,0 +1,227 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bar-black: #0a0705;
+  --color-bar-charcoal: #1a1410;
+  --color-bar-gold: #d4af37;
+  --color-bar-gold-soft: #c9a14a;
+  --color-bar-amber: #b56a1f;
+  --color-bar-amber-glow: #e0a84a;
+  --color-bar-cream: #f3e5c3;
+
+  --font-display: "Noto Serif JP", "Shippori Mincho", serif;
+}
+
+html,
+body {
+  background: radial-gradient(
+      ellipse at top,
+      #2a1a0f 0%,
+      #140c07 45%,
+      #070402 100%
+    )
+    fixed;
+  color: var(--color-bar-cream);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+}
+
+/* ゴールド発光アニメーション */
+@keyframes bar-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 20px rgba(212, 175, 55, 0.25),
+      0 0 40px rgba(181, 106, 31, 0.15),
+      inset 0 0 20px rgba(212, 175, 55, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 40px rgba(212, 175, 55, 0.45),
+      0 0 80px rgba(181, 106, 31, 0.3),
+      inset 0 0 30px rgba(212, 175, 55, 0.2);
+  }
+}
+
+.animate-bar-pulse {
+  animation: bar-pulse 3s ease-in-out infinite;
+}
+
+/* 録音中のマイクの鼓動 */
+@keyframes mic-listening {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 0 rgba(224, 168, 74, 0.55),
+      0 10px 40px rgba(212, 175, 55, 0.4);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow:
+      0 0 0 24px rgba(224, 168, 74, 0),
+      0 10px 40px rgba(212, 175, 55, 0.4);
+  }
+}
+
+.animate-mic-listening {
+  animation: mic-listening 1.5s ease-in-out infinite;
+}
+
+/* ほのかな湯気・ゆらぎ */
+@keyframes smoke-sway {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: translateY(-6px) scale(1.02);
+  }
+}
+
+.animate-smoke {
+  animation: smoke-sway 6s ease-in-out infinite;
+}
+
+/* 背景写真のゆっくりした呼吸（生きてる感） */
+@keyframes bar-breath {
+  0%,
+  100% {
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    transform: scale(1.025) translate(-2px, -3px);
+  }
+}
+
+.animate-bar-breath {
+  animation: bar-breath 14s ease-in-out infinite;
+  transform-origin: center 40%;
+  will-change: transform;
+}
+
+/* バーの暖色ランプのちらつき */
+@keyframes lamp-flicker {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  12% {
+    opacity: 0.85;
+  }
+  26% {
+    opacity: 0.48;
+  }
+  42% {
+    opacity: 0.7;
+  }
+  58% {
+    opacity: 0.6;
+  }
+  74% {
+    opacity: 0.9;
+  }
+  88% {
+    opacity: 0.5;
+  }
+}
+
+.animate-lamp {
+  animation: lamp-flicker 6s ease-in-out infinite;
+}
+
+/* 幕間字幕のフェード */
+@keyframes stage-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+    letter-spacing: 0.1em;
+  }
+  15%,
+  85% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    letter-spacing: 0.25em;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(1.02);
+    letter-spacing: 0.35em;
+  }
+}
+
+.animate-stage {
+  animation: stage-fade 2.8s ease-in-out forwards;
+}
+
+/* おすすめカードのふわっと登場 */
+@keyframes card-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-card-rise {
+  animation: card-rise 0.5s ease-out forwards;
+}
+
+/* ドロワーのスライドアップ */
+@keyframes drawer-up {
+  0% {
+    transform: translateY(100%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-drawer {
+  animation: drawer-up 0.35s cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+}
+
+/* キャレット点滅（Typewriter 用） */
+@keyframes caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-caret {
+  animation: caret-blink 1s steps(2) infinite;
+}
+
+/* ガラス＝グラスモーフィズム（深夜Bar仕様・暗め） */
+.glass {
+  background: linear-gradient(
+    135deg,
+    rgba(20, 14, 8, 0.55) 0%,
+    rgba(10, 7, 4, 0.65) 100%
+  );
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.gold-text {
+  background: linear-gradient(135deg, #f3e5c3 0%, #d4af37 50%, #b56a1f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
