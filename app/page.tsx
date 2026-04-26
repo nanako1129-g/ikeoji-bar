@@ -109,6 +109,8 @@ export default function Page() {
   const [hydrated, setHydrated] = useState(false);
   const [masterId, setMasterId] = useState<MasterId>(DEFAULT_MASTER_ID);
   const [bgmEnabled, setBgmEnabled] = useState<boolean>(false);
+  // マスターの声 ON/OFF。OFF にすると喋らず、画面に字幕としてマスターの返事を出す。
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(true);
   const [logOpen, setLogOpen] = useState(false);
   const [closingOpen, setClosingOpen] = useState(false);
   const [textMode, setTextMode] = useState(false);
@@ -127,6 +129,10 @@ export default function Page() {
   const sendMessageRef = useRef<(text: string) => Promise<void> | void>(
     () => undefined,
   );
+  // speak() の中で「現在の voiceEnabled」を参照したいが、毎回 useCallback の依存に
+  // 入れて作り直すと scheduleIdleNudge / sendMessage まで芋づる式に作り直しになる。
+  // そこで ref で常に最新値を見るようにする。
+  const voiceEnabledRef = useRef(voiceEnabled);
 
   // ----- localStorage からの復元 -----
   useEffect(() => {
@@ -145,6 +151,10 @@ export default function Page() {
       }
       setMasterId(saved.masterId);
       setBgmEnabled(saved.bgmEnabled);
+      // v1 セッションには voiceEnabled が存在しないので true を既定にする。
+      if (typeof saved.voiceEnabled === "boolean") {
+        setVoiceEnabled(saved.voiceEnabled);
+      }
     }
     setHydrated(true);
   }, []);
@@ -159,8 +169,9 @@ export default function Page() {
       ),
       masterId,
       bgmEnabled,
+      voiceEnabled,
     });
-  }, [hydrated, drinkCount, messages, masterId, bgmEnabled]);
+  }, [hydrated, drinkCount, messages, masterId, bgmEnabled, voiceEnabled]);
 
   // ----- 音声認識 セットアップ -----
   useEffect(() => {
@@ -362,6 +373,8 @@ export default function Page() {
   // 統合 speak：保存された設定に応じて VOICEVOX or Web Speech を選択
   const speak = useCallback(
     (text: string) => {
+      // 「マスターの声 OFF」になっていたら鳴らさない（字幕で読む運用のため）
+      if (!voiceEnabledRef.current) return;
       const pref = loadVoicePref();
       if (
         pref?.engine === "voicevox" &&
@@ -381,6 +394,25 @@ export default function Page() {
     },
     [speakViaVoicevox, speakViaWebSpeech],
   );
+
+  // voiceEnabled が変わったら ref を最新化。
+  // OFF にした瞬間は再生中の音声を即座に止める。
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+    if (!voiceEnabled) {
+      stopSpeaking();
+      // speaking 中に止めた場合の見た目を idle に戻す（onended が来ない可能性に備える）
+      setMicState((s) => (s === "speaking" ? "idle" : s));
+    }
+  }, [voiceEnabled, stopSpeaking]);
+
+  // ----- 字幕（声 OFF 時に表示するマスターの最新返答） -----
+  const latestMasterText = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "master") return messages[i].text;
+    }
+    return null;
+  }, [messages]);
 
   // ----- API に送る履歴 -----
   const apiHistory = useMemo(
@@ -682,6 +714,67 @@ export default function Page() {
           </div>
 
           <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                haptic("tap");
+                setVoiceEnabled((v) => !v);
+              }}
+              aria-pressed={voiceEnabled}
+              aria-label={voiceEnabled ? "マスターの声を切る" : "マスターの声を出す"}
+              title={
+                voiceEnabled
+                  ? "マスターの声を切る（字幕モードへ）"
+                  : "マスターの声を出す"
+              }
+              className={`flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur transition active:scale-95 ${
+                voiceEnabled
+                  ? "border-[color:var(--color-bar-gold)]/70 bg-[color:var(--color-bar-gold)]/15 text-[color:var(--color-bar-gold)] shadow-[0_0_18px_rgba(212,175,55,0.35)]"
+                  : "border-[color:var(--color-bar-gold)]/30 bg-black/50 text-[color:var(--color-bar-gold-soft)]/70"
+              }`}
+            >
+              {voiceEnabled ? (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="h-4 w-4"
+                  aria-hidden
+                >
+                  <path
+                    d="M4 10v4a1 1 0 0 0 1 1h3l4 3.5a1 1 0 0 0 1.6-.8V6.3A1 1 0 0 0 12 5.5L8 9H5a1 1 0 0 0-1 1z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8 8 0 0 1 0 12"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="h-4 w-4"
+                  aria-hidden
+                >
+                  <path
+                    d="M4 10v4a1 1 0 0 0 1 1h3l4 3.5a1 1 0 0 0 1.6-.8V6.3A1 1 0 0 0 12 5.5L8 9H5a1 1 0 0 0-1 1z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M17 9l5 6M22 9l-5 6"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+            </button>
             <BgmToggle
               initialEnabled={bgmEnabled}
               onChange={(next) => setBgmEnabled(next)}
@@ -794,6 +887,19 @@ export default function Page() {
             このブラウザは音声入力に対応していないようだ。下の「文字で話す」で続けるか、Chrome
             か Safari の最新版で開いてくれ。
           </p>
+        )}
+
+        {/* 字幕：マスターの声 OFF のときだけ、最新の返答を文字で表示 */}
+        {!voiceEnabled && latestMasterText && (
+          <div
+            aria-live="polite"
+            className="w-full max-w-sm rounded-2xl border border-[color:var(--color-bar-gold)]/35 bg-black/65 px-4 py-2.5 text-[13px] leading-relaxed text-[color:var(--color-bar-cream)] shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur"
+          >
+            <span className="mr-2 text-[10px] tracking-[0.25em] text-[color:var(--color-bar-gold-soft)]">
+              MASTER
+            </span>
+            <span>「{latestMasterText}」</span>
+          </div>
         )}
 
         {/* チップ行: 文字で話す / お会計 */}
