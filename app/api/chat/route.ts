@@ -1,6 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
+import {
+  isUserMessageTooShort,
+  MIN_USER_MESSAGE_CHARS,
+} from "../../_lib/constants";
+
 export const runtime = "nodejs";
 
 type ChatHistoryItem = {
@@ -181,6 +186,13 @@ export async function POST(request: Request) {
   if (!message) {
     return NextResponse.json(
       { error: "message は必須です。" },
+      { status: 400 },
+    );
+  }
+
+  if (isUserMessageTooShort(message)) {
+    return NextResponse.json(
+      { error: `message は${MIN_USER_MESSAGE_CHARS}文字以上にしてください。` },
       { status: 400 },
     );
   }

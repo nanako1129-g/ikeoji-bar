@@ -3,6 +3,7 @@ import {
   DRINK_RECOS,
   NUDGE_MESSAGES,
   getDrinkStage,
+  isUserMessageTooShort,
   pickNudge,
   pickRecoForStage,
 } from "./constants";
@@ -19,6 +20,19 @@ describe("getDrinkStage", () => {
     [99, 3],
   ])("drinkCount=%i → stage %i", (drinkCount, expected) => {
     expect(getDrinkStage(drinkCount)).toBe(expected);
+  });
+});
+
+describe("isUserMessageTooShort", () => {
+  it("空・空白・1文字は短すぎる", () => {
+    expect(isUserMessageTooShort("")).toBe(true);
+    expect(isUserMessageTooShort("  ")).toBe(true);
+    expect(isUserMessageTooShort("あ")).toBe(true);
+  });
+
+  it("2文字以上は送ってよい", () => {
+    expect(isUserMessageTooShort("いい")).toBe(false);
+    expect(isUserMessageTooShort("ok")).toBe(false);
   });
 });
 
