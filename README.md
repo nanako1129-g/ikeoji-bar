@@ -34,6 +34,32 @@ npm run dev
 
 `http://localhost:3000` をスマホ（または DevTools の device mode）で開いてください。
 
+### 開発コマンド
+
+```bash
+npm run dev          # 開発サーバ
+npm run build        # 本番ビルド
+npm test             # ユニットテスト（Vitest）を 1 回実行
+npm run test:watch   # テスト watch モード
+```
+
+### ブランチ運用
+
+`main` への直接 push は最低限に。機能追加や修正は feature ブランチで進めるのが推奨。
+
+```bash
+git checkout -b feat/xxx       # or fix/, chore/, docs/
+# ……作業……
+git push -u origin feat/xxx
+gh pr create                   # GitHub CLI で PR 作成
+```
+
+Vercel と GitHub を連携している場合、PR を開くと自動で Preview Deployment
+（PR 専用の URL）が発行されるので、本番に出す前にスマホ実機で動作確認できる。
+
+`main` への push と PR では GitHub Actions 経由で `tsc --noEmit` / `npm test`
+/ `next build` が走り、壊れたコードがマージされないようガードしている。
+
 ### マイクを使うためのヒント
 
 - **PC の Chrome**: `http://localhost:3000` はそのまま使えます。
