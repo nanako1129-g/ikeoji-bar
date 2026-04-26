@@ -17,6 +17,36 @@ type ChatRequestBody = {
   masterId?: MasterId;
 };
 
+// 入力サイズ上限（API 鍵悪用・コスト爆発の抑止）
+const MAX_MESSAGE_CHARS = 800;
+const MAX_HISTORY_ITEMS = 40;
+const MAX_HISTORY_ITEM_CHARS = 1000;
+const MAX_BODY_BYTES = 64 * 1024; // 64KB: 履歴 40 件 × 1000 文字でも収まる余裕
+
+const VALID_MASTER_IDS = new Set<MasterId>(["ikeoji", "okami", "choiwaru"]);
+
+// 同一オリジンと、明示的に許可した本番ドメインからのみ受け付ける。
+// 環境変数 ALLOWED_ORIGINS にカンマ区切りで追加可能。
+function isAllowedOrigin(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  // ブラウザの直アクセスやサーバー間呼び出しでは origin が無いことがある。
+  // クロスオリジンリクエストでは必ず付与されるので、無い場合は許可で扱う
+  // （ただし fetch によるブラウザ間 POST は常に origin を持つ）。
+  if (!origin) return true;
+
+  const host = request.headers.get("host");
+  const sameOrigin =
+    !!host &&
+    (origin === `https://${host}` || origin === `http://${host}`);
+  if (sameOrigin) return true;
+
+  const extra = (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return extra.includes(origin);
+}
+
 function masterIntro(masterId: MasterId | undefined): string {
   switch (masterId) {
     case "okami":
@@ -90,14 +120,39 @@ ${masterIntro(masterId)}
 function toGeminiHistory(history: ChatHistoryItem[] | undefined) {
   if (!history) return [];
   return history
-    .filter((h) => typeof h.text === "string" && h.text.trim().length > 0)
+    .filter(
+      (h) =>
+        h &&
+        (h.role === "user" || h.role === "model") &&
+        typeof h.text === "string" &&
+        h.text.trim().length > 0,
+    )
+    .slice(-MAX_HISTORY_ITEMS)
     .map((h) => ({
       role: h.role,
-      parts: [{ text: h.text }],
+      parts: [{ text: h.text.slice(0, MAX_HISTORY_ITEM_CHARS) }],
     }));
 }
 
 export async function POST(request: Request) {
+  if (!isAllowedOrigin(request)) {
+    return NextResponse.json(
+      { error: "このオリジンからのリクエストは許可されていません。" },
+      { status: 403 },
+    );
+  }
+
+  const contentLengthHeader = request.headers.get("content-length");
+  if (contentLengthHeader) {
+    const contentLength = Number.parseInt(contentLengthHeader, 10);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { error: "リクエストが大きすぎます。" },
+        { status: 413 },
+      );
+    }
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -116,10 +171,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const message = body?.message?.trim();
+  const rawMessage = typeof body?.message === "string" ? body.message : "";
+  const message = rawMessage.trim().slice(0, MAX_MESSAGE_CHARS);
   const drinkCount =
     typeof body?.drinkCount === "number" && Number.isFinite(body.drinkCount)
-      ? Math.max(0, Math.floor(body.drinkCount))
+      ? Math.max(0, Math.min(999, Math.floor(body.drinkCount)))
       : 0;
 
   if (!message) {
@@ -129,7 +185,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const systemInstruction = buildSystemPrompt(drinkCount, body.masterId);
+  const masterId =
+    body?.masterId && VALID_MASTER_IDS.has(body.masterId)
+      ? body.masterId
+      : undefined;
+
+  const systemInstruction = buildSystemPrompt(drinkCount, masterId);
+  const safeHistory = Array.isArray(body.history) ? body.history : undefined;
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -146,7 +208,7 @@ export async function POST(request: Request) {
         thinkingConfig: { thinkingBudget: 0 },
       },
       contents: [
-        ...toGeminiHistory(body.history),
+        ...toGeminiHistory(safeHistory),
         {
           role: "user",
           parts: [{ text: message }],
