@@ -212,16 +212,28 @@ export default function Page() {
       if (event.error === "no-speech") {
         setErrorText("……声が聞こえなかったみたいだ。もう一度どうぞ。");
       } else if (event.error === "not-allowed") {
+        // ユーザーがマイク許可を拒否した／OS 側でブロックされている。
+        // 文字モードに切り替えて続けられるようにする。
         setErrorText(
-          "マイクが許可されていない。ブラウザ設定を確認してくれ。",
+          "マイクが許可されていない。設定で許可するか、下の入力欄から文字でどうぞ。",
         );
-      } else if (event.error === "network") {
+        setTextMode(true);
+      } else if (
+        event.error === "network" ||
+        event.error === "service-not-allowed" ||
+        event.error === "audio-capture"
+      ) {
+        // iOS Safari 等で頻発する音声認識サービスのエラー。
+        // 復帰の見込みが薄いので即座に文字モードへ。
         setErrorText(
-          "音声認識サーバに繋がらなかった。下の「文字で話す」を使ってくれ。",
+          "この端末では音声認識がうまく動かないようだ。下の入力欄から文字で話しかけてくれ。",
         );
         setTextMode(true);
       } else if (event.error !== "aborted") {
-        setErrorText(`マイクで問題が起きた: ${event.error}`);
+        setErrorText(
+          `マイクで問題が起きた（${event.error}）。下の入力欄から文字でどうぞ。`,
+        );
+        setTextMode(true);
       }
       setMicState("idle");
     };
