@@ -41,6 +41,13 @@ export const MASTERS: MasterProfile[] = [
 
 export const DEFAULT_MASTER_ID: MasterId = "ikeoji";
 
+/** これ未満の文字数（trim 後）では会話 API を送らない（1文字の誤送・無駄消費の抑止） */
+export const MIN_USER_MESSAGE_CHARS = 2;
+
+export function isUserMessageTooShort(text: string): boolean {
+  return text.trim().length < MIN_USER_MESSAGE_CHARS;
+}
+
 // 泥酔度ステージ（4段階）
 export type DrinkStage = 0 | 1 | 2 | 3;
 

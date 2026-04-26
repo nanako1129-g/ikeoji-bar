@@ -19,6 +19,7 @@ import { initAudio, playSfx } from "./_lib/audio";
 import {
   DEFAULT_MASTER_ID,
   getDrinkStage,
+  isUserMessageTooShort,
   pickNudge,
   STAGE_META,
   type ChatMessage,
@@ -50,6 +51,9 @@ const STATE_BADGE: Record<MicState, string> = {
 };
 
 const IDLE_NUDGE_MS = 30_000;
+
+const USER_MSG_TOO_SHORT_HINT =
+  "……一文字だと、俺も何を返すか分からない。もう一呼吸、話してくれ。";
 
 type Preset = {
   id: string;
@@ -478,6 +482,10 @@ export default function Page() {
       // と /api/chat への往復と「考え中」表示の誤作動を防げる（Gemini 消費もゼロ）。
       const trimmed = userText.trim();
       if (!trimmed) return;
+      if (isUserMessageTooShort(trimmed)) {
+        setErrorText(USER_MSG_TOO_SHORT_HINT);
+        return;
+      }
 
       if (sendingRef.current) return;
       sendingRef.current = true;
@@ -603,6 +611,10 @@ export default function Page() {
   const handleTextSubmit = useCallback(() => {
     const text = textDraft.trim();
     if (!text) return;
+    if (isUserMessageTooShort(text)) {
+      setErrorText(USER_MSG_TOO_SHORT_HINT);
+      return;
+    }
     if (micState === "thinking") return;
     if (micState === "listening") {
       try {
@@ -980,7 +992,11 @@ export default function Page() {
             />
             <button
               type="submit"
-              disabled={!textDraft.trim() || micState === "thinking"}
+              disabled={
+                !textDraft.trim() ||
+                isUserMessageTooShort(textDraft) ||
+                micState === "thinking"
+              }
               aria-label="送信"
               className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-[color:var(--color-bar-gold)]/60 bg-gradient-to-br from-[color:var(--color-bar-gold)] to-[color:var(--color-bar-amber)] text-[color:var(--color-bar-black)] transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
