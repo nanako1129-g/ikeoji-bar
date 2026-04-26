@@ -331,6 +331,27 @@ function VoicevoxTab({
   const [speedScale, setSpeedScale] = useState(0.95);
   const [pitchScale, setPitchScale] = useState(-0.02);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+
+  const releaseAudio = useCallback(() => {
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        /* noop */
+      }
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  }, []);
+
+  // ページ離脱時に未解放の URL を確実に始末する
+  useEffect(() => {
+    return releaseAudio;
+  }, [releaseAudio]);
 
   const check = useCallback(async () => {
     setStatus("checking");
@@ -357,12 +378,9 @@ function VoicevoxTab({
     void check();
   }, [check]);
 
-  const play = async (speaker: VoicevoxSpeaker, style: VoicevoxStyleLike) => {
+  const play = async (_speaker: VoicevoxSpeaker, style: VoicevoxStyleLike) => {
     try {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
+      releaseAudio();
       setPlayingId(style.id);
       const blob = await synthesizeVoicevox({
         text,
@@ -374,14 +392,16 @@ function VoicevoxTab({
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audioRef.current = audio;
-      audio.onended = () => {
+      audioUrlRef.current = url;
+      const cleanup = () => {
         setPlayingId(null);
-        URL.revokeObjectURL(url);
+        if (audioUrlRef.current === url) {
+          URL.revokeObjectURL(url);
+          audioUrlRef.current = null;
+        }
       };
-      audio.onerror = () => {
-        setPlayingId(null);
-        URL.revokeObjectURL(url);
-      };
+      audio.onended = cleanup;
+      audio.onerror = cleanup;
       await audio.play();
     } catch (e) {
       setPlayingId(null);

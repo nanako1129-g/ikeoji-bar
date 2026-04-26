@@ -121,7 +121,12 @@ export default function Page() {
   const idleTimerRef = useRef<number | null>(null);
   const lastNudgeRef = useRef<string | undefined>(undefined);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsAudioUrlRef = useRef<string | null>(null);
   const ttsAbortRef = useRef<AbortController | null>(null);
+  // 音声認識ハンドラから常に最新の sendMessage を呼べるようにする
+  const sendMessageRef = useRef<(text: string) => Promise<void> | void>(
+    () => undefined,
+  );
 
   // ----- localStorage からの復元 -----
   useEffect(() => {
@@ -215,7 +220,7 @@ export default function Page() {
       setInterimText("");
       finalTranscriptRef.current = "";
       if (finalText) {
-        void sendMessage(finalText);
+        void sendMessageRef.current(finalText);
       } else {
         setMicState((s) => (s === "listening" ? "idle" : s));
       }
@@ -231,7 +236,6 @@ export default function Page() {
       }
       recognitionRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 再生停止（両エンジン共通）
@@ -247,6 +251,10 @@ export default function Page() {
         /* noop */
       }
       ttsAudioRef.current = null;
+    }
+    if (ttsAudioUrlRef.current) {
+      URL.revokeObjectURL(ttsAudioUrlRef.current);
+      ttsAudioUrlRef.current = null;
     }
     if (ttsAbortRef.current) {
       ttsAbortRef.current.abort();
@@ -280,15 +288,17 @@ export default function Page() {
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         ttsAudioRef.current = audio;
+        ttsAudioUrlRef.current = url;
         audio.onplay = () => setMicState("speaking");
-        audio.onended = () => {
+        const cleanup = () => {
           setMicState("idle");
-          URL.revokeObjectURL(url);
+          if (ttsAudioUrlRef.current === url) {
+            URL.revokeObjectURL(url);
+            ttsAudioUrlRef.current = null;
+          }
         };
-        audio.onerror = () => {
-          setMicState("idle");
-          URL.revokeObjectURL(url);
-        };
+        audio.onended = cleanup;
+        audio.onerror = cleanup;
         await audio.play();
         return true;
       } catch (e) {
@@ -482,6 +492,12 @@ export default function Page() {
     },
     [apiHistory, drinkCount, masterId, resetIdleTimer, speak],
   );
+
+  // 音声認識ハンドラ（初回マウント時に固定）から、毎レンダーで作り直される
+  // 最新の sendMessage を呼べるようにする。
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
 
   const handleMicTap = useCallback(() => {
     if (!supported || micState === "thinking") return;

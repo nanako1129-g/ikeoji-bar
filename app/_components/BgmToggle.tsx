@@ -13,6 +13,14 @@ export default function BgmToggle({ initialEnabled, onChange }: Props) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [pending, setPending] = useState(false);
 
+  // 親側で localStorage から復元した値が遅れて流れてきたとき、ボタン表示を
+  // それに同期させる。AudioContext は実際のユーザー操作があるまで suspended
+  // のままなので、自動再生が鳴ってしまう心配はない（resume されたタイミングで
+  // 鳴り始める）。
+  useEffect(() => {
+    setEnabled(initialEnabled);
+  }, [initialEnabled]);
+
   useEffect(() => {
     if (enabled) {
       setPending(true);
