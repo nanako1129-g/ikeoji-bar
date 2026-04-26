@@ -474,6 +474,11 @@ export default function Page() {
   // ----- メッセージ送信 -----
   const sendMessage = useCallback(
     async (userText: string) => {
+      // 無言（空・空白のみ）は API にも送らない。サーバーは拒否するが、ここで止める
+      // と /api/chat への往復と「考え中」表示の誤作動を防げる（Gemini 消費もゼロ）。
+      const trimmed = userText.trim();
+      if (!trimmed) return;
+
       if (sendingRef.current) return;
       sendingRef.current = true;
       resetIdleTimer();
@@ -486,7 +491,7 @@ export default function Page() {
       const userMessage: ChatMessage = {
         id: `u-${Date.now()}`,
         role: "user",
-        text: userText,
+        text: trimmed,
       };
       setMessages((prev) => [...prev, userMessage]);
 
@@ -495,7 +500,7 @@ export default function Page() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: userText,
+            message: trimmed,
             drinkCount,
             history: apiHistory,
             masterId,
