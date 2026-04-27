@@ -13,12 +13,18 @@ let masterGain: GainNode | null = null;
 let bgmGain: GainNode | null = null;
 let sfxGain: GainNode | null = null;
 
+// BGM ファイルを差し替えたら数字を上げる（ブラウザ・CDN のキャッシュを避ける）
+const BGM_FILE_QUERY = "?v=2";
+
 // BGM 状態
 let bgmElement: HTMLAudioElement | null = null;
 let bgmSource: MediaElementAudioSourceNode | null = null;
+let bgmLoadedUrl: string | null = null;
 let bgmRunning = false;
 let bgmTimers: number[] = [];
 let bgmNoiseNodes: AudioNode[] = [];
+/** stopBgm() フェード後の完全停止用タイマー */
+let stopTimer: number | null = null;
 
 function getCtx(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -55,20 +61,66 @@ export async function initAudio(): Promise<void> {
 
 // ----- BGM: mp3 があればそれを優先 -----
 
+function bgmFileUrl(): string {
+  return `/sounds/bgm.mp3${BGM_FILE_QUERY}`;
+}
+
+function teardownBgmElement(): void {
+  if (bgmElement) {
+    try {
+      bgmElement.pause();
+      bgmElement.removeAttribute("src");
+      bgmElement.load();
+    } catch {
+      /* noop */
+    }
+  }
+  bgmElement = null;
+  try {
+    bgmSource?.disconnect();
+  } catch {
+    /* noop */
+  }
+  bgmSource = null;
+  bgmLoadedUrl = null;
+}
+
+/** フェードなしでファイルBGM・合成BGMを即停止（再開・中断時の二重鳴り防止） */
+function stopBgmPlaybackImmediate(): void {
+  if (stopTimer !== null) {
+    window.clearTimeout(stopTimer);
+    stopTimer = null;
+  }
+  stopBgmDrone();
+  if (bgmElement) {
+    try {
+      bgmElement.pause();
+      bgmElement.currentTime = 0;
+    } catch {
+      /* noop */
+    }
+  }
+}
+
 async function tryLoadBgmElement(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   const c = getCtx();
   if (!c || !bgmGain) return false;
-  if (bgmElement) return true;
+
+  const url = bgmFileUrl();
+  if (bgmElement && bgmLoadedUrl !== url) {
+    teardownBgmElement();
+  }
+  if (bgmElement && bgmLoadedUrl === url) return true;
 
   try {
-    const res = await fetch("/sounds/bgm.mp3", { method: "HEAD" });
+    const res = await fetch(url, { method: "HEAD" });
     if (!res.ok) return false;
   } catch {
     return false;
   }
 
-  const audio = new Audio("/sounds/bgm.mp3");
+  const audio = new Audio(url);
   audio.loop = true;
   audio.preload = "auto";
   audio.crossOrigin = "anonymous";
@@ -81,6 +133,7 @@ async function tryLoadBgmElement(): Promise<boolean> {
     return false;
   }
   bgmElement = audio;
+  bgmLoadedUrl = url;
   return true;
 }
 
@@ -381,8 +434,6 @@ const BGM_LEVEL = 0.32;
 const BGM_FADE_IN_SEC = 2.0;
 const BGM_FADE_OUT_SEC = 1.2;
 
-let stopTimer: number | null = null;
-
 function fadeIn() {
   const c = getCtx();
   if (!c || !bgmGain) return;
@@ -407,10 +458,9 @@ export async function startBgm(): Promise<void> {
   const c = getCtx();
   if (!c) return;
 
-  if (stopTimer !== null) {
-    window.clearTimeout(stopTimer);
-    stopTimer = null;
-  }
+  // 直前の stopBgm フェード待ちをキャンセルしただけだとドローン／要素が残るため、
+  // 必ず同期で止めてからどちらか一方だけを開始する（iOS で play 成否が変わる場合も含む）。
+  stopBgmPlaybackImmediate();
 
   const hasFile = await tryLoadBgmElement();
   if (hasFile && bgmElement) {
@@ -419,7 +469,12 @@ export async function startBgm(): Promise<void> {
       fadeIn();
       return;
     } catch {
-      /* fall through to drone */
+      try {
+        bgmElement.pause();
+        bgmElement.currentTime = 0;
+      } catch {
+        /* noop */
+      }
     }
   }
   startBgmDrone();
@@ -434,15 +489,7 @@ export function stopBgm(): void {
   }
   stopTimer = window.setTimeout(() => {
     stopTimer = null;
-    if (bgmElement) {
-      try {
-        bgmElement.pause();
-        bgmElement.currentTime = 0;
-      } catch {
-        /* noop */
-      }
-    }
-    stopBgmDrone();
+    stopBgmPlaybackImmediate();
   }, fadeMs + 80);
 }
 
