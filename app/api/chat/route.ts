@@ -245,7 +245,19 @@ ${masterIntro(masterId)}
 
   const stagePrompts = getStagePrompts(masterId);
   const stageId = getStageId(drinkCount);
-  return `${common}\n\n${stagePrompts[stageId]}`;
+  const youngContinued =
+    (masterId === "young_bartender" || masterId === "muscle") &&
+    drinkCount >= 1;
+
+  const continuedSessionRule = youngContinued
+    ? `
+
+【このターン（桜夜・最重要）】
+- もう初回来店の場面ではない。店先の「いらっしゃいませ」「ようこそ」「お目にかかれて」「今日もいらしてくださって」など、入店・出迎えだけの定型は一切使わない。
+- ユーザーの直前の発言（乾杯・お酒・さきほどの話など）に続く返答から始め、会話の流れを途切れさせない。2回目以降の乾杯なら、グラスと今夜の続きについて自然に応じる。`
+    : "";
+
+  return `${common}\n\n${stagePrompts[stageId]}${continuedSessionRule}`;
 }
 
 function toGeminiHistory(history: ChatHistoryItem[] | undefined) {
