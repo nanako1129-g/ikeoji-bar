@@ -7,7 +7,7 @@ export type StoredSession = {
   messages: ChatMessage[];
   masterId: MasterId;
   bgmEnabled: boolean;
-  // v1 のときは保存されていなかったので optional。読み出し時に true にフォールバックする。
+  // v1 のときは保存されていなかったので optional。無い場合は画面上の既定（声オフ）を使う。
   voiceEnabled?: boolean;
   savedAt: number;
 };

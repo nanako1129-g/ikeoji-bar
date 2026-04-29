@@ -43,6 +43,12 @@ const MIC_LABEL: Record<MicState, string> = {
   speaking: "マスターが一言",
 };
 
+/** テキスト入力が既定のとき、アイドルはマイクを「音声でも」の補助として示す */
+function micUiLabel(micState: MicState, textMode: boolean): string {
+  if (micState === "idle" && textMode) return "音声でも話しかける";
+  return MIC_LABEL[micState];
+}
+
 const STATE_BADGE: Record<MicState, string> = {
   idle: "カウンター越し",
   listening: "耳を傾けている",
@@ -114,10 +120,10 @@ export default function Page() {
   const [masterId, setMasterId] = useState<MasterId>(DEFAULT_MASTER_ID);
   const [bgmEnabled, setBgmEnabled] = useState<boolean>(false);
   // マスターの声 ON/OFF。OFF にすると喋らず、画面に字幕としてマスターの返事を出す。
-  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(true);
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(false);
   const [logOpen, setLogOpen] = useState(false);
   const [closingOpen, setClosingOpen] = useState(false);
-  const [textMode, setTextMode] = useState(false);
+  const [textMode, setTextMode] = useState(true);
   const [textDraft, setTextDraft] = useState("");
   const textInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -155,7 +161,7 @@ export default function Page() {
       }
       setMasterId(saved.masterId);
       setBgmEnabled(saved.bgmEnabled);
-      // v1 セッションには voiceEnabled が存在しないので true を既定にする。
+      // voiceEnabled が無い旧セッションは既定をそのまま（声オフ）。
       if (typeof saved.voiceEnabled === "boolean") {
         setVoiceEnabled(saved.voiceEnabled);
       }
@@ -660,6 +666,7 @@ export default function Page() {
 
   const drunk = STAGE_META[getDrinkStage(drinkCount)];
   const state = STATE_BADGE[micState];
+  const micLabelShown = micUiLabel(micState, textMode);
 
   const presets: Preset[] = [
     {
@@ -1034,7 +1041,7 @@ export default function Page() {
               onClick={handleMicTap}
               disabled={!supported || micState === "thinking"}
               aria-pressed={micState === "listening"}
-              aria-label={MIC_LABEL[micState]}
+              aria-label={micLabelShown}
               className={`relative flex h-20 w-20 items-center justify-center rounded-full border-2 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
                 micState === "listening"
                   ? "animate-mic-listening border-[color:var(--color-bar-gold)] bg-gradient-to-br from-[color:var(--color-bar-gold)] to-[color:var(--color-bar-amber)] text-[color:var(--color-bar-black)]"
@@ -1092,7 +1099,7 @@ export default function Page() {
               )}
             </button>
             <p className="text-[10px] font-medium tracking-[0.2em] text-[color:var(--color-bar-cream)]/90">
-              {MIC_LABEL[micState]}
+              {micLabelShown}
             </p>
           </div>
 
