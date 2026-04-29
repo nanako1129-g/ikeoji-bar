@@ -6,6 +6,7 @@ import {
   isUserMessageTooShort,
   pickNudge,
   pickRecoForStage,
+  wantsYoungCounterMoment,
 } from "./constants";
 
 describe("getDrinkStage", () => {
@@ -33,6 +34,22 @@ describe("isUserMessageTooShort", () => {
   it("2文字以上は送ってよい", () => {
     expect(isUserMessageTooShort("いい")).toBe(false);
     expect(isUserMessageTooShort("ok")).toBe(false);
+  });
+});
+
+describe("wantsYoungCounterMoment", () => {
+  it("おかわり・おつまみ・追加などで true", () => {
+    expect(wantsYoungCounterMoment("おかわりちょうだい")).toBe(true);
+    expect(wantsYoungCounterMoment("もう一杯ください")).toBe(true);
+    expect(wantsYoungCounterMoment("おつまみ作って")).toBe(true);
+    expect(wantsYoungCounterMoment("おつまみください")).toBe(true);
+    expect(wantsYoungCounterMoment("追加でお願い")).toBe(true);
+    expect(wantsYoungCounterMoment("料理して")).toBe(true);
+  });
+
+  it("該当しない雑談は false", () => {
+    expect(wantsYoungCounterMoment("今日つらかった")).toBe(false);
+    expect(wantsYoungCounterMoment("そうだね")).toBe(false);
   });
 });
 

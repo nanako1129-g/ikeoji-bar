@@ -21,6 +21,7 @@ import {
   getDrinkStage,
   isUserMessageTooShort,
   pickNudge,
+  wantsYoungCounterMoment,
   STAGE_META,
   type ChatMessage,
   type DrinkStage,
@@ -67,10 +68,25 @@ function masterProximityBadge(
   masterId: MasterId,
   drinkStage: DrinkStage,
   micState: MicState,
+  youngCounterMoment: boolean,
 ): string {
   const besideYoung =
     (masterId === "young_bartender" || masterId === "muscle") &&
     drinkStage >= 1;
+  if (besideYoung && youngCounterMoment) {
+    switch (micState) {
+      case "idle":
+        return "カウンター越し";
+      case "listening":
+        return "カウンターで聞いている";
+      case "thinking":
+        return "カウンターでついで中";
+      case "speaking":
+        return "カウンターから話しかけ中";
+      default:
+        return STATE_BADGE[micState];
+    }
+  }
   if (!besideYoung) return STATE_BADGE[micState];
   switch (micState) {
     case "idle":
@@ -214,6 +230,9 @@ export default function Page() {
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsAudioUrlRef = useRef<string | null>(null);
   const ttsAbortRef = useRef<AbortController | null>(null);
+  /** 桜夜くんをカウンター側の絵に一時表示しているとき（おかわり・おつまみ依頼など） */
+  const [youngCounterMoment, setYoungCounterMoment] = useState(false);
+  const youngCounterHideTimerRef = useRef<number | null>(null);
   // 音声認識ハンドラから常に最新の sendMessage を呼べるようにする
   const sendMessageRef = useRef<(text: string) => Promise<void> | void>(
     () => undefined,
@@ -248,6 +267,14 @@ export default function Page() {
       }
     }
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (youngCounterHideTimerRef.current !== null) {
+        window.clearTimeout(youngCounterHideTimerRef.current);
+      }
+    };
   }, []);
 
   // ----- 状態が変わるたびに localStorage に保存 -----
@@ -570,6 +597,19 @@ export default function Page() {
       }
 
       if (sendingRef.current) return;
+      const sendStartedAt = Date.now();
+      const shouldYoungCounterBeat =
+        (masterId === "young_bartender" || masterId === "muscle") &&
+        getDrinkStage(drinkCount) >= 1 &&
+        wantsYoungCounterMoment(trimmed);
+      if (shouldYoungCounterBeat) {
+        if (youngCounterHideTimerRef.current !== null) {
+          window.clearTimeout(youngCounterHideTimerRef.current);
+          youngCounterHideTimerRef.current = null;
+        }
+        setYoungCounterMoment(true);
+      }
+
       sendingRef.current = true;
       resetIdleTimer();
       setErrorText(null);
@@ -617,8 +657,23 @@ export default function Page() {
         setDrinkCount((c) => c + 1);
         playSfx("ice");
         speak(reply);
+        if (shouldYoungCounterBeat) {
+          const elapsed = Date.now() - sendStartedAt;
+          const delay = Math.max(1600 - elapsed, 200);
+          youngCounterHideTimerRef.current = window.setTimeout(() => {
+            setYoungCounterMoment(false);
+            youngCounterHideTimerRef.current = null;
+          }, delay);
+        }
       } catch (error) {
         console.error(error);
+        if (shouldYoungCounterBeat) {
+          setYoungCounterMoment(false);
+          if (youngCounterHideTimerRef.current !== null) {
+            window.clearTimeout(youngCounterHideTimerRef.current);
+            youngCounterHideTimerRef.current = null;
+          }
+        }
         setErrorText(
           error instanceof Error
             ? `マスターが応えられなかった: ${error.message}`
@@ -740,12 +795,26 @@ export default function Page() {
     setErrorText(null);
     setInterimText("");
     lastNudgeRef.current = undefined;
+    setYoungCounterMoment(false);
+    if (youngCounterHideTimerRef.current !== null) {
+      window.clearTimeout(youngCounterHideTimerRef.current);
+      youngCounterHideTimerRef.current = null;
+    }
   }, []);
 
   const drinkStage = getDrinkStage(drinkCount);
   const drunk = STAGE_META[drinkStage];
-  const state = masterProximityBadge(masterId, drinkStage, micState);
+  const state = masterProximityBadge(
+    masterId,
+    drinkStage,
+    micState,
+    youngCounterMoment,
+  );
   const masterImages = MASTER_IMAGE_SETS[masterId] ?? MASTER_IMAGE_SETS.ikeoji;
+  const showYoungCounterStill =
+    youngCounterMoment &&
+    (masterId === "young_bartender" || masterId === "muscle") &&
+    drinkStage >= 1;
   const micLabelShown = micUiLabel(micState, textMode);
 
   const presets: Preset[] = [
@@ -813,10 +882,12 @@ export default function Page() {
           ].map(({ stage, src }) => {
             const active = drinkStage === stage;
             const speaking = active && micState === "speaking";
+            const displaySrc =
+              showYoungCounterStill && active ? masterImages.stage0 : src;
             return (
               <Image
                 key={src}
-                src={src}
+                src={displaySrc}
                 alt=""
                 fill
                 priority

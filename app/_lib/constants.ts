@@ -62,6 +62,28 @@ export function isUserMessageTooShort(text: string): boolean {
   return text.trim().length < MIN_USER_MESSAGE_CHARS;
 }
 
+/**
+ * 桜夜くんがカウンター側にいる演出へ切り替えるユーザ発話か（おかわり・おつまみ用意など）。
+ * クライアントのみで判定し、API は変更しない。
+ */
+export function wantsYoungCounterMoment(text: string): boolean {
+  const s = text.normalize("NFKC");
+  if (
+    /おかわり|お替わり|もう一杯|もう１杯|もう1杯|ついで|注いで|追加|おつぎ|もうひとつ/.test(
+      s,
+    )
+  ) {
+    return true;
+  }
+  if (/おつまみ|つまみ/.test(s) && /作|用意|つくって|よいしょ|ちょうだい|ください|頼/.test(s)) {
+    return true;
+  }
+  if (/料理して|用意して|盛り合わせ|おあて|おかず/.test(s)) {
+    return true;
+  }
+  return false;
+}
+
 // 泥酔度ステージ（4段階）
 export type DrinkStage = 0 | 1 | 2 | 3;
 
