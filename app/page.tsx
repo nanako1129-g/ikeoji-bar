@@ -156,6 +156,18 @@ const MASTER_IMAGE_SETS: Record<MasterId, MasterImageSet> = {
 const USER_MSG_TOO_SHORT_HINT =
   "……一文字だと、俺も何を返すか分からない。もう一呼吸、話してくれ。";
 
+/** fetch / API 由来以外の技術的メッセージをユーザーにそのまま見せない */
+function userFacingChatError(error: unknown): string {
+  const generic =
+    "マスターが応えられなかった。しばらくしてからもう一度試してくれ。";
+  if (!(error instanceof Error)) return generic;
+  const msg = error.message.trim();
+  if (!msg || msg.length > 160) return generic;
+  if (/[/\\](?:src|app|node_modules|packages)[/\\]/i.test(msg)) return generic;
+  if (/\s+at\s+/i.test(msg) && /:\d+/.test(msg)) return generic;
+  return `マスターが応えられなかった: ${msg}`;
+}
+
 type Preset = {
   id: string;
   label: string;
@@ -674,11 +686,7 @@ export default function Page() {
             youngCounterHideTimerRef.current = null;
           }
         }
-        setErrorText(
-          error instanceof Error
-            ? `マスターが応えられなかった: ${error.message}`
-            : "マスターが応えられなかった。",
-        );
+        setErrorText(userFacingChatError(error));
         setMicState("idle");
         haptic("warning");
       } finally {

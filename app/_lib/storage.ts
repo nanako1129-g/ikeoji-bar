@@ -1,6 +1,50 @@
-import type { ChatMessage, MasterId } from "./constants";
+import {
+  DEFAULT_MASTER_ID,
+  type ChatMessage,
+  type MasterId,
+} from "./constants";
 
 const KEY = "ikeoji-bar:session:v1";
+
+/** 改ざん・肥大化したセッションでも UI が破綻しないように上限する */
+const MAX_STORED_MESSAGES = 150;
+const MAX_STORED_TEXT_CHARS = 8000;
+
+const VALID_MASTER_IDS = new Set<MasterId>([
+  "ikeoji",
+  "young_bartender",
+  "muscle",
+  "okami",
+  "choiwaru",
+]);
+
+function sanitizeMasterId(raw: unknown): MasterId {
+  if (typeof raw !== "string" || !VALID_MASTER_IDS.has(raw as MasterId)) {
+    return DEFAULT_MASTER_ID;
+  }
+  return raw === "muscle" ? "young_bartender" : (raw as MasterId);
+}
+
+function sanitizeMessages(raw: unknown): ChatMessage[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(-MAX_STORED_MESSAGES)
+    .flatMap((m, i): ChatMessage[] => {
+      if (!m || typeof m !== "object") return [];
+      const item = m as Partial<ChatMessage>;
+      const role = item.role === "user" || item.role === "master" ? item.role : null;
+      const text =
+        typeof item.text === "string"
+          ? item.text.slice(0, MAX_STORED_TEXT_CHARS).trim()
+          : "";
+      const id =
+        typeof item.id === "string"
+          ? item.id.slice(0, 160)
+          : `restored-${i}-${Date.now()}`;
+      if (!role || text.length === 0) return [];
+      return [{ id, role, text }];
+    });
+}
 
 export type StoredSession = {
   drinkCount: number;
@@ -17,10 +61,33 @@ export function loadSession(): StoredSession | null {
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredSession;
+    const parsed = JSON.parse(raw) as Partial<StoredSession>;
     if (!parsed || typeof parsed !== "object") return null;
     if (!Array.isArray(parsed.messages)) return null;
-    return parsed;
+    const drinkCount =
+      typeof parsed.drinkCount === "number" && Number.isFinite(parsed.drinkCount)
+        ? Math.max(0, Math.min(99999, Math.floor(parsed.drinkCount)))
+        : 0;
+    const masterId = sanitizeMasterId(parsed.masterId);
+    const messages = sanitizeMessages(parsed.messages);
+    const bgmEnabled =
+      typeof parsed.bgmEnabled === "boolean" ? parsed.bgmEnabled : false;
+    const voiceEnabled =
+      typeof parsed.voiceEnabled === "boolean"
+        ? parsed.voiceEnabled
+        : undefined;
+    const savedAt =
+      typeof parsed.savedAt === "number" && Number.isFinite(parsed.savedAt)
+        ? parsed.savedAt
+        : Date.now();
+    return {
+      drinkCount,
+      messages,
+      masterId,
+      bgmEnabled,
+      voiceEnabled,
+      savedAt,
+    };
   } catch {
     return null;
   }

@@ -31,6 +31,8 @@ type ChatRequestBody = {
 const MAX_MESSAGE_CHARS = 800;
 const MAX_HISTORY_ITEMS = 40;
 const MAX_HISTORY_ITEM_CHARS = 1000;
+/** 履歴合計の上限（プロンプト肥大・コスト・レイテンシ対策） */
+const MAX_HISTORY_TOTAL_CHARS = 48_000;
 const MAX_BODY_BYTES = 64 * 1024; // 64KB: 履歴 40 件 × 1000 文字でも収まる余裕
 
 const VALID_MASTER_IDS = new Set<MasterId>([
@@ -40,6 +42,68 @@ const VALID_MASTER_IDS = new Set<MasterId>([
   "okami",
   "choiwaru",
 ]);
+
+/** 同一クライアントあたりのリクエスト上限（時間窓ごと）。サーバーレスではインスタンス単位のため完全ではない。 */
+function parsePositiveEnvInt(raw: string | undefined, fallback: number): number {
+  const n = Number.parseInt(raw ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+const CHAT_RATE_LIMIT_WINDOW_MS = parsePositiveEnvInt(
+  process.env.CHAT_RATE_LIMIT_WINDOW_MS,
+  60_000,
+);
+const CHAT_RATE_LIMIT_MAX = parsePositiveEnvInt(
+  process.env.CHAT_RATE_LIMIT_MAX,
+  45,
+);
+
+type RateBucket = { count: number; windowStart: number };
+const rateBuckets = new Map<string, RateBucket>();
+
+function clientIp(request: Request): string {
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) {
+    const first = xff.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  return "unknown";
+}
+
+function pruneRateBuckets(now: number): void {
+  if (rateBuckets.size <= 2000) return;
+  const staleAfter = CHAT_RATE_LIMIT_WINDOW_MS * 3;
+  for (const [k, v] of rateBuckets) {
+    if (now - v.windowStart >= staleAfter) rateBuckets.delete(k);
+  }
+  if (rateBuckets.size > 8000) rateBuckets.clear();
+}
+
+function isChatRateLimited(request: Request): { limited: boolean; retrySec: number } {
+  if (process.env.CHAT_RATE_LIMIT_DISABLED === "true") {
+    return { limited: false, retrySec: 0 };
+  }
+  const ip = clientIp(request);
+  const now = Date.now();
+  let bucket = rateBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart >= CHAT_RATE_LIMIT_WINDOW_MS) {
+    rateBuckets.set(ip, { count: 1, windowStart: now });
+    pruneRateBuckets(now);
+    return { limited: false, retrySec: 0 };
+  }
+  bucket.count++;
+  if (bucket.count <= CHAT_RATE_LIMIT_MAX) {
+    return { limited: false, retrySec: 0 };
+  }
+  const elapsed = now - bucket.windowStart;
+  const retrySec = Math.max(
+    1,
+    Math.ceil((CHAT_RATE_LIMIT_WINDOW_MS - elapsed) / 1000),
+  );
+  return { limited: true, retrySec };
+}
 
 // 同一オリジンと、明示的に許可した本番ドメインからのみ受け付ける。
 // 環境変数 ALLOWED_ORIGINS にカンマ区切りで追加可能。
@@ -223,6 +287,29 @@ function getStagePrompts(masterId: MasterId | undefined) {
 /** プライベート誘いへの応答ルール（泥酔度＝クライアントの drinkCount と一致） */
 const PRIVATE_INVITE_DRUNK_THRESHOLD = 15;
 
+/** 年下バーテンダーのほんのり口説き（これより上で発動、泥酔度は drinkCount） */
+const YOUNG_LIGHT_FLIRT_THRESHOLD = 10;
+
+function youngLightFlirtGuidance(
+  masterId: MasterId | undefined,
+  drinkCount: number,
+): string {
+  if (
+    (masterId !== "young_bartender" && masterId !== "muscle") ||
+    drinkCount <= YOUNG_LIGHT_FLIRT_THRESHOLD
+  ) {
+    return "";
+  }
+
+  return `
+
+【桜夜・ほんのり口説き（最重要）】
+現在の泥酔度は ${drinkCount} で、${YOUNG_LIGHT_FLIRT_THRESHOLD} を超えている（このルールは年下バーテンダー／桜夜のみ）。
+- 年上のあなたへのほのかな恋心が、やわらかく表に出やすい。**毎回ではなくときどき**、軽く口説くような一言を忍ばせてよい（褒め・気遣い・直前の話題を拾うことを芯にしつつ、文の端に甘さや間をのせる）。
+- **露骨な誘い・直接的な性的な言い回し・強引な迫りは禁止**。ちょっとドキドキする程度の照れ・うぶさ・静かな一本線にとどめる。
+- ユーザーの本題や愚痴を無視して口説きだけにしない。一人称「ボク」・やわらかい敬語は維持。`;
+}
+
 function privateInviteGuidance(
   masterId: MasterId | undefined,
   drinkCount: number,
@@ -246,12 +333,12 @@ function privateInviteGuidance(
   if (young) {
     return `${header}
 - 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}未満のとき：うれしさはにじませつつ、プロとしての距離を保ち、「今夜はここで」「またバーで」などにとどめる。個人的な確約や過激な返しはしない。
-- 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}以上のとき：胸が先に反応してしまうような動揺。「明日だったら……ちゃんと向こうへ足が向いてしまうかも」「今夜じゃなくてもいいなら……」など、行く気・向かう気をほのめかすが、時間や約束を確定させない。照れと間でドキドキさせる。一人称「ボク」・やわらかい敬語は維持し、押しつけや過激な描写はしない。`;
+- 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}以上のとき：胸が先に反応してしまうような動揺。「明日だったら……」「今夜じゃなくてもいいなら……」など、行く気・向かう気をほのめかすが、時間や約束を確定させない。このとき「今夜ではなく明日」を口にするニュアンスには、次を込めること：**いま泥酔しているあなたを酔った勢いではなく、ちゃんと本心で大事にしたいから**——軽く拾いたくない、という誠実さとドキドキが両立するようにする（説教口調にはしない）。一人称「ボク」・やわらかい敬語は維持し、押しつけや過激な描写はしない。`;
   }
 
   return `${header}
 - 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}未満のとき：うれしさはにじませつつ、今夜はここまでと線を引く。軽い確約はしない。
-- 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}以上のとき：低く短く本心がにじむ。「……明日なら、考えてやってもいいかもな」など、行く気をほのめかすが断定しない。ドキドキする余韻を残す。タメ口を維持。`;
+- 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}以上のとき：低く短く本心がにじむ。「……明日なら、考えてやってもいいかもな」など、行く気をほのめかすが断定しない。**明日と言うのは、今夜酔っているあなたを勢いでいたぶりたくない、ちゃんと大事にしたいから**、という意味をにじませる（セリフで説明しすぎず、間と短さでドキドキと余韻を残す）。タメ口を維持。`;
 }
 
 function buildSystemPrompt(
@@ -291,24 +378,37 @@ ${masterIntro(masterId)}
 - ユーザーの直前の発言（乾杯・お酒・さきほどの話など）に続く返答から始め、会話の流れを途切れさせない。2回目以降の乾杯なら、グラスと今夜の続きについて自然に応じる。`
     : "";
 
-  return `${common}\n\n${stagePrompts[stageId]}${continuedSessionRule}${privateInviteGuidance(masterId, drinkCount)}`;
+  return `${common}\n\n${stagePrompts[stageId]}${continuedSessionRule}${youngLightFlirtGuidance(masterId, drinkCount)}${privateInviteGuidance(masterId, drinkCount)}`;
+}
+
+function normalizeHistory(raw: unknown): ChatHistoryItem[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const items: ChatHistoryItem[] = [];
+  for (const el of raw.slice(-MAX_HISTORY_ITEMS)) {
+    if (!el || typeof el !== "object") continue;
+    const role = (el as { role?: unknown }).role;
+    const textRaw = (el as { text?: unknown }).text;
+    if (role !== "user" && role !== "model") continue;
+    if (typeof textRaw !== "string") continue;
+    const text = textRaw.slice(0, MAX_HISTORY_ITEM_CHARS).trim();
+    if (!text) continue;
+    items.push({ role, text });
+  }
+  while (
+    items.reduce((sum, h) => sum + h.text.length, 0) > MAX_HISTORY_TOTAL_CHARS &&
+    items.length > 0
+  ) {
+    items.shift();
+  }
+  return items.length > 0 ? items : undefined;
 }
 
 function toGeminiHistory(history: ChatHistoryItem[] | undefined) {
   if (!history) return [];
-  return history
-    .filter(
-      (h) =>
-        h &&
-        (h.role === "user" || h.role === "model") &&
-        typeof h.text === "string" &&
-        h.text.trim().length > 0,
-    )
-    .slice(-MAX_HISTORY_ITEMS)
-    .map((h) => ({
-      role: h.role,
-      parts: [{ text: h.text.slice(0, MAX_HISTORY_ITEM_CHARS) }],
-    }));
+  return history.map((h) => ({
+    role: h.role,
+    parts: [{ text: h.text.slice(0, MAX_HISTORY_ITEM_CHARS) }],
+  }));
 }
 
 export async function POST(request: Request) {
@@ -330,17 +430,53 @@ export async function POST(request: Request) {
     }
   }
 
+  const rate = isChatRateLimited(request);
+  if (rate.limited) {
+    return NextResponse.json(
+      {
+        error:
+          "短時間にアクセスが集中しています。少し時間をおいてからお試しください。",
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rate.retrySec),
+        },
+      },
+    );
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "GEMINI_API_KEY が設定されていません。" },
-      { status: 500 },
+      {
+        error:
+          "サーバー側の設定が完了していません。しばらくしてからお試しください。",
+      },
+      { status: 503 },
+    );
+  }
+
+  let buffer: ArrayBuffer;
+  try {
+    buffer = await request.arrayBuffer();
+  } catch {
+    return NextResponse.json(
+      { error: "リクエストの読み取りに失敗しました。" },
+      { status: 400 },
+    );
+  }
+
+  if (buffer.byteLength > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: "リクエストが大きすぎます。" },
+      { status: 413 },
     );
   }
 
   let body: ChatRequestBody;
   try {
-    body = (await request.json()) as ChatRequestBody;
+    body = JSON.parse(new TextDecoder().decode(buffer)) as ChatRequestBody;
   } catch {
     return NextResponse.json(
       { error: "リクエストボディの解析に失敗しました。" },
@@ -375,7 +511,7 @@ export async function POST(request: Request) {
       : undefined;
 
   const systemInstruction = buildSystemPrompt(drinkCount, masterId);
-  const safeHistory = Array.isArray(body.history) ? body.history : undefined;
+  const safeHistory = normalizeHistory(body.history);
 
   try {
     const ai = new GoogleGenAI({ apiKey });
