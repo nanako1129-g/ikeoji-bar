@@ -25,7 +25,8 @@ export default function StageTransition({ drinkCount }: Props) {
       prevStageRef.current = stage;
       setMessage(STAGE_META[stage].transition);
       setVisible(true);
-      playSfx(going === "up" ? "chimeUp" : "chimeDown");
+      // 節目が上がる時はワインを注ぐ長めの音、戻る時はチャイムで控えめに
+      playSfx(going === "up" ? "pourWine" : "chimeDown");
       haptic("success");
       const t = window.setTimeout(() => setVisible(false), 2800);
       return () => window.clearTimeout(t);

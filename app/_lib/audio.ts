@@ -6,7 +6,32 @@
 //
 // ユーザー操作のあとに init() を呼ぶ必要がある（自動再生ポリシー対策）。
 
-type SfxKind = "ice" | "shaker" | "glassPlace" | "chimeUp" | "chimeDown";
+type SfxKind =
+  | "ice"
+  | "shaker"
+  | "glassPlace"
+  | "chimeUp"
+  | "chimeDown"
+  | "pourOnIce"
+  | "pourWine";
+
+// public/sounds/ にあれば優先して再生する SFX。無ければ合成にフォールバック。
+const SFX_FILES: Partial<Record<SfxKind, string>> = {
+  ice: "/sounds/ice.mp3",
+  pourOnIce: "/sounds/pour-on-ice.mp3",
+  pourWine: "/sounds/pour-wine.mp3",
+};
+
+// 種別ごとの再生レベル微調整（ファイル間の音量差を均す）
+const SFX_FILE_LEVEL: Partial<Record<SfxKind, number>> = {
+  ice: 0.9,
+  pourOnIce: 0.7,
+  pourWine: 0.7,
+};
+
+// デコード済みバッファのキャッシュ。null は「ロード失敗 → 以後は合成」
+const sfxBuffers = new Map<SfxKind, AudioBuffer | null>();
+const sfxLoading = new Map<SfxKind, Promise<AudioBuffer | null>>();
 
 let ctx: AudioContext | null = null;
 let masterGain: GainNode | null = null;
@@ -627,11 +652,15 @@ function playChime(direction: "up" | "down") {
   });
 }
 
-export function playSfx(kind: SfxKind): void {
-  initAudio();
+function playSfxSynth(kind: SfxKind): void {
   switch (kind) {
     case "ice":
+    case "pourOnIce": // 合成フォールバック時はカラン音で代用
       playIceClink();
+      break;
+    case "pourWine":
+      // 合成フォールバック時は「グラスを置く + ほのかなチャイム」で節目感
+      playGlassPlace();
       break;
     case "shaker":
       playShaker();
@@ -646,4 +675,84 @@ export function playSfx(kind: SfxKind): void {
       playChime("down");
       break;
   }
+}
+
+function playDecoded(buffer: AudioBuffer, level: number): void {
+  const c = getCtx();
+  if (!c || !sfxGain) return;
+  const src = c.createBufferSource();
+  src.buffer = buffer;
+  const g = c.createGain();
+  g.gain.value = level;
+  src.connect(g);
+  g.connect(sfxGain);
+  src.start();
+}
+
+function loadSfxFile(kind: SfxKind): Promise<AudioBuffer | null> {
+  const cached = sfxLoading.get(kind);
+  if (cached) return cached;
+
+  const url = SFX_FILES[kind];
+  const c = getCtx();
+  if (!url || !c) {
+    sfxBuffers.set(kind, null);
+    return Promise.resolve(null);
+  }
+
+  const p = (async () => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        sfxBuffers.set(kind, null);
+        return null;
+      }
+      const ab = await res.arrayBuffer();
+      const decoded = await c.decodeAudioData(ab.slice(0));
+      sfxBuffers.set(kind, decoded);
+      return decoded;
+    } catch {
+      sfxBuffers.set(kind, null);
+      return null;
+    }
+  })();
+  sfxLoading.set(kind, p);
+  return p;
+}
+
+/** 初回操作後に呼ぶと、ファイルSFXを先読みしてレイテンシをゼロにする */
+export function preloadSfxFiles(): void {
+  if (!getCtx()) return;
+  for (const kind of Object.keys(SFX_FILES) as SfxKind[]) {
+    if (!sfxBuffers.has(kind) && !sfxLoading.has(kind)) {
+      void loadSfxFile(kind);
+    }
+  }
+}
+
+export function playSfx(kind: SfxKind): void {
+  void initAudio();
+
+  // ファイルが未指定 → 合成
+  if (!(kind in SFX_FILES)) {
+    playSfxSynth(kind);
+    return;
+  }
+
+  const cached = sfxBuffers.get(kind);
+  if (cached) {
+    playDecoded(cached, SFX_FILE_LEVEL[kind] ?? 0.8);
+    return;
+  }
+
+  // 既にロード失敗が確定している → 合成で出す
+  if (sfxBuffers.has(kind) && cached === null) {
+    playSfxSynth(kind);
+    return;
+  }
+
+  // 初回はファイルロード中なので、まず合成で即時に音を出して体感ゼロ遅延に。
+  // 次回以降はキャッシュから即時ファイル再生される。
+  playSfxSynth(kind);
+  void loadSfxFile(kind);
 }

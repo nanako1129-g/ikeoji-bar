@@ -15,7 +15,7 @@ import DrinkRecoCard from "./_components/DrinkRecoCard";
 import LogDrawer from "./_components/LogDrawer";
 import MasterSelect from "./_components/MasterSelect";
 import StageTransition from "./_components/StageTransition";
-import { initAudio, playSfx } from "./_lib/audio";
+import { initAudio, playSfx, preloadSfxFiles } from "./_lib/audio";
 import {
   DEFAULT_MASTER_ID,
   getDrinkStage,
@@ -499,7 +499,8 @@ export default function Page() {
       setErrorText(null);
       setMicState("thinking");
       void initAudio();
-      playSfx("shaker");
+      preloadSfxFiles();
+      playSfx("pourOnIce");
       haptic("confirm");
 
       const userMessage: ChatMessage = {
@@ -565,6 +566,7 @@ export default function Page() {
   const handleMicTap = useCallback(() => {
     if (!supported || micState === "thinking") return;
     void initAudio();
+    preloadSfxFiles();
     resetIdleTimer();
 
     if (micState === "speaking") {
