@@ -18,9 +18,9 @@ export const MASTERS: MasterProfile[] = [
   {
     id: "ikeoji",
     name: "イケオジ",
-    tagline: "渋くて、たまにくだらない",
+    tagline: "低い声で、君を心配する人",
     description:
-      "低い声で語りかける中年バーテンダー。親父ギャグと甘やかしの振れ幅が魅力。",
+      "頑張り屋の君を、いつも静かに見ている。たまに褒めて、ふいに甘く落とす中年バーテンダー。",
     available: true,
   },
   {
