@@ -4,7 +4,7 @@ export type ChatMessage = {
   text: string;
 };
 
-export type MasterId = "ikeoji" | "okami" | "choiwaru";
+export type MasterId = "ikeoji" | "muscle" | "okami" | "choiwaru";
 
 export type MasterProfile = {
   id: MasterId;
@@ -21,6 +21,14 @@ export const MASTERS: MasterProfile[] = [
     tagline: "低い声で、君を心配する人",
     description:
       "頑張り屋の君を、いつも静かに見ている。たまに褒めて、ふいに甘く落とす中年バーテンダー。",
+    available: true,
+  },
+  {
+    id: "muscle",
+    name: "鍛えた青年",
+    tagline: "クールで丁寧、君の前だけ照れる",
+    description:
+      "普段は静かにグラスを磨く知的でクールな年下バーテンダー。誰にでも丁寧だけど、君が来ると密かに顔がほころぶ。",
     available: true,
   },
   {

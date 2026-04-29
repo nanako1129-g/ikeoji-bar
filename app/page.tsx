@@ -63,6 +63,50 @@ const STATE_BADGE: Record<MicState, string> = {
 
 const IDLE_NUDGE_MS = 30_000;
 
+// マスター別の画像セット。pensive = idle 用（stage 0 のみで使う）。
+// stage0〜3 = speaking/常時表示する各ステージの絵。
+// muscle はまだ専用画像が無いのでイケオジ画像を暫定的に流用している。
+// 専用画像が公開ディレクトリに揃ったら、ここのパスを差し替えるだけ。
+type MasterImageSet = {
+  pensive: string;
+  stage0: string;
+  stage1: string;
+  stage2: string;
+  stage3: string;
+};
+
+const MASTER_IMAGE_SETS: Record<MasterId, MasterImageSet> = {
+  ikeoji: {
+    pensive: "/master-jiji-pensive.png",
+    stage0: "/master-jiji.png",
+    stage1: "/master-stage1.png",
+    stage2: "/master-stage2.png",
+    stage3: "/master-stage3.png",
+  },
+  muscle: {
+    // TODO: 専用画像が用意できたら public/master-muscle-*.png に差し替え
+    pensive: "/master-jiji-pensive.png",
+    stage0: "/master-jiji.png",
+    stage1: "/master-stage1.png",
+    stage2: "/master-stage2.png",
+    stage3: "/master-stage3.png",
+  },
+  okami: {
+    pensive: "/master-jiji-pensive.png",
+    stage0: "/master-jiji.png",
+    stage1: "/master-stage1.png",
+    stage2: "/master-stage2.png",
+    stage3: "/master-stage3.png",
+  },
+  choiwaru: {
+    pensive: "/master-jiji-pensive.png",
+    stage0: "/master-jiji.png",
+    stage1: "/master-stage1.png",
+    stage2: "/master-stage2.png",
+    stage3: "/master-stage3.png",
+  },
+};
+
 const USER_MSG_TOO_SHORT_HINT =
   "……一文字だと、俺も何を返すか分からない。もう一呼吸、話してくれ。";
 
@@ -669,6 +713,7 @@ export default function Page() {
   const drinkStage = getDrinkStage(drinkCount);
   const drunk = STAGE_META[drinkStage];
   const state = STATE_BADGE[micState];
+  const masterImages = MASTER_IMAGE_SETS[masterId] ?? MASTER_IMAGE_SETS.ikeoji;
   const micLabelShown = micUiLabel(micState, textMode);
 
   const presets: Preset[] = [
@@ -702,7 +747,7 @@ export default function Page() {
         <div className="animate-bar-breath absolute inset-0">
           {/* stage 0 idle 用：考え顔 */}
           <Image
-            src="/master-jiji-pensive.png"
+            src={masterImages.pensive}
             alt=""
             fill
             priority
@@ -715,9 +760,9 @@ export default function Page() {
                 : "opacity-0"
             }`}
           />
-          {/* stage 0 speaking 用：既存の柔らか笑顔 */}
+          {/* stage 0 speaking 用：柔らか笑顔 */}
           <Image
-            src="/master-jiji.png"
+            src={masterImages.stage0}
             alt=""
             fill
             priority
@@ -730,9 +775,9 @@ export default function Page() {
           />
           {/* stage 1〜3：そのステージの絵を常時表示。speaking 中は少し明るく拡大 */}
           {[
-            { stage: 1 as const, src: "/master-stage1.png" },
-            { stage: 2 as const, src: "/master-stage2.png" },
-            { stage: 3 as const, src: "/master-stage3.png" },
+            { stage: 1 as const, src: masterImages.stage1 },
+            { stage: 2 as const, src: masterImages.stage2 },
+            { stage: 3 as const, src: masterImages.stage3 },
           ].map(({ stage, src }) => {
             const active = drinkStage === stage;
             const speaking = active && micState === "speaking";
