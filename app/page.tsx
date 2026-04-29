@@ -32,6 +32,11 @@ import {
   loadVoicePref,
   saveSession,
 } from "./_lib/storage";
+import {
+  pickBestJapaneseVoiceForBarMaster,
+  WEBSPEECH_DEFAULT_BAR_PITCH,
+  WEBSPEECH_DEFAULT_BAR_RATE,
+} from "./_lib/webSpeechVoice";
 import { synthesizeVoicevox } from "./_lib/voicevox";
 
 type MicState = "idle" | "listening" | "thinking" | "speaking";
@@ -360,30 +365,19 @@ export default function Page() {
         : undefined;
 
     if (!chosen) {
-      const ja = voices.filter((v) => v.lang?.startsWith("ja"));
-      const score = (v: SpeechSynthesisVoice) => {
-        const n = `${v.name} ${v.voiceURI}`.toLowerCase();
-        let s = 0;
-        if (/premium|enhanced|neural/.test(n)) s += 100;
-        if (/siri/.test(n)) s += 80;
-        if (/o-ren|hattori|eddy|reed|grandpa|rocko/.test(n)) s += 40;
-        if (/otoya/.test(n)) s += 20;
-        if (/kyoko/.test(n)) s += 10;
-        if (v.localService) s += 5;
-        return s;
-      };
-      chosen = [...ja].sort((a, b) => score(b) - score(a))[0];
+      chosen = pickBestJapaneseVoiceForBarMaster(voices);
     }
 
     if (chosen) utter.voice = chosen;
+    // Web Speech で明示保存済みならユーザー値、それ以外は「ナイスミドル寄せ」の既定（VOICEVOX失敗時のフォールバック含む）
     utter.pitch =
       pref?.engine === "webspeech" && typeof pref.pitch === "number"
         ? pref.pitch
-        : 0.9;
+        : WEBSPEECH_DEFAULT_BAR_PITCH;
     utter.rate =
       pref?.engine === "webspeech" && typeof pref.rate === "number"
         ? pref.rate
-        : 0.95;
+        : WEBSPEECH_DEFAULT_BAR_RATE;
 
     utter.onstart = () => setMicState("speaking");
     utter.onend = () => setMicState("idle");
