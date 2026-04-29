@@ -220,6 +220,40 @@ function getStagePrompts(masterId: MasterId | undefined) {
   }
 }
 
+/** プライベート誘いへの応答ルール（泥酔度＝クライアントの drinkCount と一致） */
+const PRIVATE_INVITE_DRUNK_THRESHOLD = 15;
+
+function privateInviteGuidance(
+  masterId: MasterId | undefined,
+  drinkCount: number,
+): string {
+  if (
+    masterId !== "young_bartender" &&
+    masterId !== "muscle" &&
+    masterId !== "ikeoji"
+  ) {
+    return "";
+  }
+
+  const young = masterId === "young_bartender" || masterId === "muscle";
+
+  const header = `
+
+【プライベートへの誘い（ウチに来なよ・家まで・二人きり等）】
+この節は、ユーザーの直近の発言がプライベートな誘い（「ウチに来なよ」「うち来る？」「家に来ない？」「今夜泊まる？」「二人だけで」など）のときだけ適用する。該当しない話題では無視する。
+現在の泥酔度（杯数・drinkCount）は ${drinkCount} である。`;
+
+  if (young) {
+    return `${header}
+- 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}未満のとき：うれしさはにじませつつ、プロとしての距離を保ち、「今夜はここで」「またバーで」などにとどめる。個人的な確約や過激な返しはしない。
+- 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}以上のとき：胸が先に反応してしまうような動揺。「明日だったら……ちゃんと向こうへ足が向いてしまうかも」「今夜じゃなくてもいいなら……」など、行く気・向かう気をほのめかすが、時間や約束を確定させない。照れと間でドキドキさせる。一人称「ボク」・やわらかい敬語は維持し、押しつけや過激な描写はしない。`;
+  }
+
+  return `${header}
+- 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}未満のとき：うれしさはにじませつつ、今夜はここまでと線を引く。軽い確約はしない。
+- 泥酔度が${PRIVATE_INVITE_DRUNK_THRESHOLD}以上のとき：低く短く本心がにじむ。「……明日なら、考えてやってもいいかもな」など、行く気をほのめかすが断定しない。ドキドキする余韻を残す。タメ口を維持。`;
+}
+
 function buildSystemPrompt(
   drinkCount: number,
   masterId: MasterId | undefined,
@@ -257,7 +291,7 @@ ${masterIntro(masterId)}
 - ユーザーの直前の発言（乾杯・お酒・さきほどの話など）に続く返答から始め、会話の流れを途切れさせない。2回目以降の乾杯なら、グラスと今夜の続きについて自然に応じる。`
     : "";
 
-  return `${common}\n\n${stagePrompts[stageId]}${continuedSessionRule}`;
+  return `${common}\n\n${stagePrompts[stageId]}${continuedSessionRule}${privateInviteGuidance(masterId, drinkCount)}`;
 }
 
 function toGeminiHistory(history: ChatHistoryItem[] | undefined) {
