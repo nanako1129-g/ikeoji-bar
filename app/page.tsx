@@ -389,8 +389,14 @@ export default function Page() {
   // 統合 speak：保存された設定に応じて VOICEVOX or Web Speech を選択
   const speak = useCallback(
     (text: string) => {
-      // 「マスターの声 OFF」になっていたら鳴らさない（字幕で読む運用のため）
-      if (!voiceEnabledRef.current) return;
+      // 「マスターの声 OFF」になっていたら鳴らさない（字幕で読む運用のため）。
+      // ここで return する場合、呼び出し元（sendMessage 等）は直前に
+      // micState を "thinking" にしているので、そのままだと「考え中…」が
+      // 永遠に続いてしまう。idle に戻して UI のロックを解く。
+      if (!voiceEnabledRef.current) {
+        setMicState((s) => (s === "thinking" || s === "speaking" ? "idle" : s));
+        return;
+      }
       const pref = loadVoicePref();
       if (
         pref?.engine === "voicevox" &&
