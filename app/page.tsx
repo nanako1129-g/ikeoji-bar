@@ -690,14 +690,17 @@ export default function Page() {
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col overflow-hidden">
-      {/* 背景：考え顔 (idle) ←→ 笑顔 (speaking) を、ステージ別の絵でクロスフェードする。
-          飲み進めるほど speaking 側の絵が「親密 → 全開」に変化していく。 */}
+      {/* 背景：ステージごとに 5 枚の絵を opacity で切り替え。
+          ・stage 0: 考え顔 ↔ 笑顔（speaking）でクロスフェード（声OFFでもベースは pensive）
+          ・stage 1〜3: そのステージ専用の絵を常時表示。speaking 中は少し明るく拡大して
+            「語りかけている」ニュアンスを足す。
+          ステージが上がる毎に絵が必ず切り替わるので、声 OFF でも画像進化が見える。 */}
       <div
         aria-hidden
         className="fixed inset-0 z-0 bg-black"
       >
         <div className="animate-bar-breath absolute inset-0">
-          {/* 考え顔（idle / listening / thinking） — 全ステージ共通 */}
+          {/* stage 0 idle 用：考え顔 */}
           <Image
             src="/master-jiji-pensive.png"
             alt=""
@@ -705,23 +708,34 @@ export default function Page() {
             priority
             sizes="100vw"
             className={`object-cover object-center transition-[opacity,filter,transform] duration-1000 ease-in-out ${
-              micState === "speaking"
-                ? "opacity-0"
-                : micState === "listening"
+              drinkStage === 0 && micState !== "speaking"
+                ? micState === "listening"
                   ? "opacity-100 brightness-95 saturate-95"
                   : "opacity-100 brightness-90"
+                : "opacity-0"
             }`}
           />
-          {/* 笑顔（speaking）— ステージごとに絵を切り替え。
-              4枚すべてDOMに置き、可視判定だけ opacity で制御することで
-              ステージ遷移時に取得待ちが発生しない。 */}
+          {/* stage 0 speaking 用：既存の柔らか笑顔 */}
+          <Image
+            src="/master-jiji.png"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className={`object-cover object-center transition-[opacity,filter,transform] duration-1000 ease-in-out ${
+              drinkStage === 0 && micState === "speaking"
+                ? "scale-[1.015] opacity-100 brightness-110 saturate-110"
+                : "opacity-0"
+            }`}
+          />
+          {/* stage 1〜3：そのステージの絵を常時表示。speaking 中は少し明るく拡大 */}
           {[
-            { stage: 0 as const, src: "/master-jiji.png" },
             { stage: 1 as const, src: "/master-stage1.png" },
             { stage: 2 as const, src: "/master-stage2.png" },
             { stage: 3 as const, src: "/master-stage3.png" },
           ].map(({ stage, src }) => {
-            const visible = micState === "speaking" && drinkStage === stage;
+            const active = drinkStage === stage;
+            const speaking = active && micState === "speaking";
             return (
               <Image
                 key={src}
@@ -731,8 +745,10 @@ export default function Page() {
                 priority
                 sizes="100vw"
                 className={`object-cover object-center transition-[opacity,filter,transform] duration-1000 ease-in-out ${
-                  visible
-                    ? "scale-[1.015] opacity-100 brightness-110 saturate-110"
+                  active
+                    ? speaking
+                      ? "scale-[1.015] opacity-100 brightness-110 saturate-110"
+                      : "opacity-100 brightness-90 saturate-95"
                     : "opacity-0"
                 }`}
               />
