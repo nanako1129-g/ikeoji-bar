@@ -95,3 +95,10 @@ export const IKEOJI_SUGGESTED_NAMES = [
   "ちび式じい",
   "白上虎太郎",
 ];
+
+/** 桜夜くん向け：若め〜軽やかな声（VOICEVOX 標準キャラ名）。イケおじ系と重なる名前は桜夜おすすめから除外して表示する。 */
+export const YOUNG_BARTENDER_SUGGESTED_NAMES = [
+  "雀松朱司",
+  "麒ヶ島宗麟",
+  "雨晴はう",
+];

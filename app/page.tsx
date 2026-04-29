@@ -23,6 +23,7 @@ import {
   pickNudge,
   STAGE_META,
   type ChatMessage,
+  type DrinkStage,
   type MasterId,
 } from "./_lib/constants";
 import { haptic } from "./_lib/haptic";
@@ -60,6 +61,30 @@ const STATE_BADGE: Record<MicState, string> = {
   thinking: "一杯、注ぎながら",
   speaking: "語りかけ中",
 };
+
+/** 右上バッジ「マスター｜…」の右側。桜夜くんがほろ酔い〜（横座り絵）のときは「隣」の文言に統一。 */
+function masterProximityBadge(
+  masterId: MasterId,
+  drinkStage: DrinkStage,
+  micState: MicState,
+): string {
+  const besideYoung =
+    (masterId === "young_bartender" || masterId === "muscle") &&
+    drinkStage >= 1;
+  if (!besideYoung) return STATE_BADGE[micState];
+  switch (micState) {
+    case "idle":
+      return "隣の席";
+    case "listening":
+      return "隣で聞いている";
+    case "thinking":
+      return "隣で、注ぎながら";
+    case "speaking":
+      return "隣で語りかけ中";
+    default:
+      return STATE_BADGE[micState];
+  }
+}
 
 const IDLE_NUDGE_MS = 30_000;
 
@@ -512,7 +537,7 @@ export default function Page() {
     idleTimerRef.current = window.setTimeout(() => {
       if (sendingRef.current) return;
       if (micState === "listening" || micState === "thinking") return;
-      const text = pickNudge(lastNudgeRef.current);
+      const text = pickNudge(lastNudgeRef.current, masterId);
       lastNudgeRef.current = text;
       setMessages((prev) => [
         ...prev,
@@ -522,7 +547,7 @@ export default function Page() {
       haptic("tap");
       speak(text);
     }, IDLE_NUDGE_MS);
-  }, [micState, resetIdleTimer, speak]);
+  }, [micState, masterId, resetIdleTimer, speak]);
 
   // 会話があるたびに無音タイマー再セット
   useEffect(() => {
@@ -719,7 +744,7 @@ export default function Page() {
 
   const drinkStage = getDrinkStage(drinkCount);
   const drunk = STAGE_META[drinkStage];
-  const state = STATE_BADGE[micState];
+  const state = masterProximityBadge(masterId, drinkStage, micState);
   const masterImages = MASTER_IMAGE_SETS[masterId] ?? MASTER_IMAGE_SETS.ikeoji;
   const micLabelShown = micUiLabel(micState, textMode);
 

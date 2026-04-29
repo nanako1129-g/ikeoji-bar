@@ -32,9 +32,9 @@ export const MASTERS: MasterProfile[] = [
   {
     id: "young_bartender",
     name: "桜夜（おうや）",
-    tagline: "やわらかい敬語で、親しみと思いやりを",
+    tagline: "おうや／このバーの年下バーテンダー",
     description:
-      "このバーの年下バーテンダー。グラスを磨くクールさと鍛えた体格のギャップ萌え。タイプは年上の女性。あなたへのほのかな恋心を、あたたかい丁寧語で包む。",
+      "やわらかい敬語と思いやりで迎える桜夜くん。グラスを磨くクールさと鍛えた体格のギャップ萌え。タイプは年上の女性。あなたへのほのかな恋心を、あたたかい丁寧語で包む。",
     available: true,
   },
   {
@@ -120,6 +120,12 @@ export const DRINK_RECOS: DrinkReco[] = [
     note: "軽やかに、夜の入口に。",
   },
   {
+    stage: 0,
+    name: "ソルティ・ドッグ",
+    kana: "Salty Dog",
+    note: "桜夜くんおすすめ。縁の塩と柑橘が、最初の一杯をやわらげる。",
+  },
+  {
     stage: 1,
     name: "山崎 12年 ロック",
     kana: "Yamazaki 12y",
@@ -130,6 +136,12 @@ export const DRINK_RECOS: DrinkReco[] = [
     name: "ネグローニ",
     kana: "Negroni",
     note: "ほろ苦さが、そのため息に似合う。",
+  },
+  {
+    stage: 1,
+    name: "チェリー・ブランデー・ソーダ",
+    kana: "Cherry Brandy Soda",
+    note: "桜夜くんがよく勧める甘め。ほろ酔いにちょうどいい。",
   },
   {
     stage: 2,
@@ -144,6 +156,12 @@ export const DRINK_RECOS: DrinkReco[] = [
     note: "砂糖とビターで、昔の話を少しだけ。",
   },
   {
+    stage: 2,
+    name: "桜ソーダ（ノンアル寄り）",
+    kana: "Sakura Soda",
+    note: "淡い桃色。桜夜くんの『今夜はゆっくり』に合わせた一杯。",
+  },
+  {
     stage: 3,
     name: "ホットミルク・ウィスキー",
     kana: "Hot Milk Whisky",
@@ -154,6 +172,12 @@ export const DRINK_RECOS: DrinkReco[] = [
     name: "水",
     kana: "Chaser",
     note: "今夜は、これで十分。ゆっくり帰るんだぞ。",
+  },
+  {
+    stage: 3,
+    name: "ホット・ミルクティー（ノンアル）",
+    kana: "Hot Milk Tea",
+    note: "桜夜くんおすすめの締め。泥酔のあとも胃をいたわる。",
   },
 ];
 
@@ -172,7 +196,19 @@ export const NUDGE_MESSAGES: string[] = [
   "……その沈黙も、悪くない。",
 ];
 
-export function pickNudge(prev?: string): string {
-  const pool = NUDGE_MESSAGES.filter((m) => m !== prev);
-  return pool[Math.floor(Math.random() * pool.length)] ?? NUDGE_MESSAGES[0];
+/** 桜夜くん選択時の無音ひとこと（やわらかい敬語） */
+export const NUDGE_MESSAGES_YOUNG: string[] = [
+  "……大丈夫ですか。グラスが進まなくても、それだけでもいいですよ。",
+  "無理に話さなくていいです。……ここにいてくださるだけで、ボクはうれしいです。",
+  "……今夜は、なんだか静かですね。それも、いいと思います。",
+  "……もう一杯、軽めにお淹れしましょうか。",
+  "……その沈黙も、悪くないです。ボク、そばにいますから。",
+];
+
+export function pickNudge(prev?: string, masterId?: MasterId): string {
+  const young =
+    masterId === "young_bartender" || masterId === "muscle";
+  const source = young ? NUDGE_MESSAGES_YOUNG : NUDGE_MESSAGES;
+  const pool = source.filter((m) => m !== prev);
+  return pool[Math.floor(Math.random() * pool.length)] ?? source[0];
 }

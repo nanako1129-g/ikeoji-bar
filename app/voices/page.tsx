@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_VOICEVOX_URL,
   IKEOJI_SUGGESTED_NAMES,
+  YOUNG_BARTENDER_SUGGESTED_NAMES,
   fetchSpeakers,
   pingVoicevox,
   synthesizeVoicevox,
@@ -424,13 +425,19 @@ function VoicevoxTab({
     onSaved(p);
   };
 
-  // 「渋い大人男性」を優先表示
-  const suggested = speakers.filter((s) =>
+  // 「渋い大人男性」「若めバーテンダー桜夜くん」を優先表示し、そのほかを一覧へ
+  const ikeojiSuggested = speakers.filter((s) =>
     IKEOJI_SUGGESTED_NAMES.includes(s.name),
   );
-  const others = speakers.filter(
-    (s) => !IKEOJI_SUGGESTED_NAMES.includes(s.name),
+  const youngSuggested = speakers.filter(
+    (s) =>
+      YOUNG_BARTENDER_SUGGESTED_NAMES.includes(s.name) &&
+      !IKEOJI_SUGGESTED_NAMES.includes(s.name),
   );
+  const preferredUuid = new Set(
+    [...ikeojiSuggested, ...youngSuggested].map((s) => s.speaker_uuid),
+  );
+  const others = speakers.filter((s) => !preferredUuid.has(s.speaker_uuid));
 
   return (
     <>
@@ -533,13 +540,28 @@ function VoicevoxTab({
             </p>
           )}
 
-          {suggested.length > 0 && (
+          {ikeojiSuggested.length > 0 && (
             <section className="mt-6">
               <h2 className="text-sm uppercase tracking-widest text-[color:var(--color-bar-gold)]/80">
-                ⭐ イケおじBar おすすめ
+                ⭐ イケおじBar おすすめ（渋め）
               </h2>
               <SpeakerList
-                list={suggested}
+                list={ikeojiSuggested}
+                savedSpeakerId={savedSpeakerId}
+                playingId={playingId}
+                onPlay={play}
+                onSave={save}
+              />
+            </section>
+          )}
+
+          {youngSuggested.length > 0 && (
+            <section className="mt-6">
+              <h2 className="text-sm uppercase tracking-widest text-[color:var(--color-bar-gold)]/80">
+                🌸 桜夜くん・おすすめ（やわらかめ）
+              </h2>
+              <SpeakerList
+                list={youngSuggested}
                 savedSpeakerId={savedSpeakerId}
                 playingId={playingId}
                 onPlay={play}
