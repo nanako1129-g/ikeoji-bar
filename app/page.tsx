@@ -65,7 +65,7 @@ const IDLE_NUDGE_MS = 30_000;
 
 // マスター別の画像セット。pensive = idle 用（stage 0 のみで使う）。
 // stage0〜3 = speaking/常時表示する各ステージの絵。
-// 年下バーテンダーは public/master-young.png（1枚）。ステージ差分が揃ったらパスを分ける。
+// 年下: master-young = カウンター越し／店内。master-young-beside = ほろ酔い〜（ステージ1〜3）、そばに座ったイメージ。
 type MasterImageSet = {
   pensive: string;
   stage0: string;
@@ -85,16 +85,16 @@ const MASTER_IMAGE_SETS: Record<MasterId, MasterImageSet> = {
   young_bartender: {
     pensive: "/master-young.png",
     stage0: "/master-young.png",
-    stage1: "/master-young.png",
-    stage2: "/master-young.png",
-    stage3: "/master-young.png",
+    stage1: "/master-young-beside.png",
+    stage2: "/master-young-beside.png",
+    stage3: "/master-young-beside.png",
   },
   muscle: {
     pensive: "/master-young.png",
     stage0: "/master-young.png",
-    stage1: "/master-young.png",
-    stage2: "/master-young.png",
-    stage3: "/master-young.png",
+    stage1: "/master-young-beside.png",
+    stage2: "/master-young-beside.png",
+    stage3: "/master-young-beside.png",
   },
   okami: {
     pensive: "/master-jiji-pensive.png",
@@ -1198,7 +1198,7 @@ export default function Page() {
       </nav>
 
       {/* ステージ移行の幕間 */}
-      <StageTransition drinkCount={drinkCount} />
+      <StageTransition drinkCount={drinkCount} masterId={masterId} />
 
       {/* チャットログドロワー */}
       <LogDrawer

@@ -1,15 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getDrinkStage, STAGE_META, type DrinkStage } from "../_lib/constants";
+import {
+  getDrinkStage,
+  STAGE_META,
+  type DrinkStage,
+  type MasterId,
+} from "../_lib/constants";
 import { playSfx } from "../_lib/audio";
 import { haptic } from "../_lib/haptic";
 
 type Props = {
   drinkCount: number;
+  masterId: MasterId;
 };
 
-export default function StageTransition({ drinkCount }: Props) {
+/** 年下バーテンダーがしらふ→ほろ酔いに上がるとき：カウンター越しから「そば」。 */
+const YOUNG_BESIDE_TRANSITION =
+  "――ボク、ちょっと横に座りますね。……バーの奥じゃなく、あなたのそばで。";
+
+export default function StageTransition({ drinkCount, masterId }: Props) {
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState("");
   const prevStageRef = useRef<DrinkStage | null>(null);
@@ -22,8 +32,15 @@ export default function StageTransition({ drinkCount }: Props) {
     }
     if (stage !== prevStageRef.current) {
       const going = stage > prevStageRef.current ? "up" : "down";
+      const prev = prevStageRef.current;
       prevStageRef.current = stage;
-      setMessage(STAGE_META[stage].transition);
+      const youngBeside =
+        (masterId === "young_bartender" || masterId === "muscle") &&
+        prev === 0 &&
+        stage === 1;
+      setMessage(
+        youngBeside ? YOUNG_BESIDE_TRANSITION : STAGE_META[stage].transition,
+      );
       setVisible(true);
       // 節目が上がる時はワインを注ぐ長めの音、戻る時はチャイムで控えめに
       playSfx(going === "up" ? "pourWine" : "chimeDown");
@@ -31,7 +48,7 @@ export default function StageTransition({ drinkCount }: Props) {
       const t = window.setTimeout(() => setVisible(false), 2800);
       return () => window.clearTimeout(t);
     }
-  }, [drinkCount]);
+  }, [drinkCount, masterId]);
 
   if (!visible) return null;
 
