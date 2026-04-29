@@ -4,7 +4,13 @@ export type ChatMessage = {
   text: string;
 };
 
-export type MasterId = "ikeoji" | "muscle" | "okami" | "choiwaru";
+// muscle は旧セッション互換のみ（API でも受理）。UI は young_bartender を使う。
+export type MasterId =
+  | "ikeoji"
+  | "young_bartender"
+  | "muscle"
+  | "okami"
+  | "choiwaru";
 
 export type MasterProfile = {
   id: MasterId;
@@ -24,11 +30,11 @@ export const MASTERS: MasterProfile[] = [
     available: true,
   },
   {
-    id: "muscle",
-    name: "鍛えた青年",
-    tagline: "クールで丁寧、君の前だけ照れる",
+    id: "young_bartender",
+    name: "年下バーテンダー",
+    tagline: "鍛えた腕まわりと、照れながらのひとこと",
     description:
-      "普段は静かにグラスを磨く知的でクールな年下バーテンダー。誰にでも丁寧だけど、君が来ると密かに顔がほころぶ。",
+      "グラスを磨くクールな年下だけど、体は鍛えている（ギャップ萌え）。タイプは年上の女性。カウンター越しのあなたに、ほのかな恋心を寄せている。",
     available: true,
   },
   {

@@ -65,8 +65,7 @@ const IDLE_NUDGE_MS = 30_000;
 
 // マスター別の画像セット。pensive = idle 用（stage 0 のみで使う）。
 // stage0〜3 = speaking/常時表示する各ステージの絵。
-// muscle はまだ専用画像が無いのでイケオジ画像を暫定的に流用している。
-// 専用画像が公開ディレクトリに揃ったら、ここのパスを差し替えるだけ。
+// 年下バーテンダーは public/master-young.png（1枚）。ステージ差分が揃ったらパスを分ける。
 type MasterImageSet = {
   pensive: string;
   stage0: string;
@@ -83,13 +82,19 @@ const MASTER_IMAGE_SETS: Record<MasterId, MasterImageSet> = {
     stage2: "/master-stage2.png",
     stage3: "/master-stage3.png",
   },
+  young_bartender: {
+    pensive: "/master-young.png",
+    stage0: "/master-young.png",
+    stage1: "/master-young.png",
+    stage2: "/master-young.png",
+    stage3: "/master-young.png",
+  },
   muscle: {
-    // TODO: 専用画像が用意できたら public/master-muscle-*.png に差し替え
-    pensive: "/master-jiji-pensive.png",
-    stage0: "/master-jiji.png",
-    stage1: "/master-stage1.png",
-    stage2: "/master-stage2.png",
-    stage3: "/master-stage3.png",
+    pensive: "/master-young.png",
+    stage0: "/master-young.png",
+    stage1: "/master-young.png",
+    stage2: "/master-young.png",
+    stage3: "/master-young.png",
   },
   okami: {
     pensive: "/master-jiji-pensive.png",
@@ -208,7 +213,9 @@ export default function Page() {
           ...saved.messages,
         ]);
       }
-      setMasterId(saved.masterId);
+      setMasterId(
+        saved.masterId === "muscle" ? "young_bartender" : saved.masterId,
+      );
       setBgmEnabled(saved.bgmEnabled);
       // voiceEnabled が無い旧セッションは既定をそのまま（声オフ）。
       if (typeof saved.voiceEnabled === "boolean") {
