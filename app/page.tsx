@@ -666,7 +666,8 @@ export default function Page() {
     lastNudgeRef.current = undefined;
   }, []);
 
-  const drunk = STAGE_META[getDrinkStage(drinkCount)];
+  const drinkStage = getDrinkStage(drinkCount);
+  const drunk = STAGE_META[drinkStage];
   const state = STATE_BADGE[micState];
   const micLabelShown = micUiLabel(micState, textMode);
 
@@ -689,13 +690,14 @@ export default function Page() {
 
   return (
     <main className="relative mx-auto flex min-h-dvh w-full max-w-md flex-col overflow-hidden">
-      {/* 背景：Jiji の2表情をクロスフェード（待機=考え顔 / 語りかけ=笑顔） */}
+      {/* 背景：考え顔 (idle) ←→ 笑顔 (speaking) を、ステージ別の絵でクロスフェードする。
+          飲み進めるほど speaking 側の絵が「親密 → 全開」に変化していく。 */}
       <div
         aria-hidden
         className="fixed inset-0 z-0 bg-black"
       >
         <div className="animate-bar-breath absolute inset-0">
-          {/* 考え顔（idle / listening / thinking） */}
+          {/* 考え顔（idle / listening / thinking） — 全ステージ共通 */}
           <Image
             src="/master-jiji-pensive.png"
             alt=""
@@ -710,18 +712,32 @@ export default function Page() {
                   : "opacity-100 brightness-90"
             }`}
           />
-          {/* 笑顔（speaking） */}
-          <Image
-            src="/master-jiji.png"
-            alt=""
-            fill
-            sizes="100vw"
-            className={`object-cover object-center transition-[opacity,filter,transform] duration-1000 ease-in-out ${
-              micState === "speaking"
-                ? "scale-[1.015] opacity-100 brightness-110 saturate-110"
-                : "opacity-0"
-            }`}
-          />
+          {/* 笑顔（speaking）— ステージごとに絵を切り替え。
+              4枚すべてDOMに置き、可視判定だけ opacity で制御することで
+              ステージ遷移時に取得待ちが発生しない。 */}
+          {[
+            { stage: 0 as const, src: "/master-jiji.png" },
+            { stage: 1 as const, src: "/master-stage1.png" },
+            { stage: 2 as const, src: "/master-stage2.png" },
+            { stage: 3 as const, src: "/master-stage3.png" },
+          ].map(({ stage, src }) => {
+            const visible = micState === "speaking" && drinkStage === stage;
+            return (
+              <Image
+                key={src}
+                src={src}
+                alt=""
+                fill
+                priority
+                sizes="100vw"
+                className={`object-cover object-center transition-[opacity,filter,transform] duration-1000 ease-in-out ${
+                  visible
+                    ? "scale-[1.015] opacity-100 brightness-110 saturate-110"
+                    : "opacity-0"
+                }`}
+              />
+            );
+          })}
         </div>
       </div>
 
